@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mbse.local/schema/mbse-hsm-model-v0",
+  "title": "MBSE HSM model v0",
+  "description": "MBSE HSM model v0.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_id",
+    "variables",
+    "events",
+    "initial_transition",
+    "states"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "MBSE HSM model v0.",
+      "const": "mbse-hsm-model-v0"
+    },
+    "document_id": {
+      "description": "Global document identifier.",
+      "$ref": "#/$defs/id"
+    },
+    "variables": {
+      "description": "Declared runtime variables and their default values.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/variable"
+      }
+    },
+    "events": {
+      "description": "Event declarations.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "initial_transition": {
+      "description": "Required root initial transition.",
+      "$ref": "#/$defs/initial_transition"
+    },
+    "states": {
+      "description": "Top-level states.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/state"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "callable_ref": {
+      "description": "Reference to a Python activity as {module, name}.",
+      "type": "object",
+      "required": ["module", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "module": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "required": ["name", "default_value"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_value": {
+          "description": "Default value for this declared HSM variable."
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parameter"
+          }
+        }
+      }
+    },
+    "initial_transition": {
+      "type": "object",
+      "required": ["target_id"],
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
+        "on_entry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        },
+        "on_initial": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        },
+        "on_exit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        }
+      }
+    },
+    "guard_condition": {
+      "type": "object",
+      "required": ["guard_activity", "true_branch", "false_branch"],
+      "additionalProperties": false,
+      "properties": {
+        "guard_activity": {
+          "$ref": "#/$defs/callable_ref"
+        },
+        "true_branch": {
+          "$ref": "#/$defs/guard_branch"
+        },
+        "false_branch": {
+          "$ref": "#/$defs/guard_branch"
+        }
+      }
+    },
+    "guard_branch": {
+      "description": "Branch target and optional activities for one guard condition outcome.",
+      "type": "object",
+      "required": ["target_id"],
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "$ref": "#/$defs/id"
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        }
+      }
+    },
+    "external_transition": {
+      "type": "object",
+      "required": ["event_id"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "target_id": {
+          "$ref": "#/$defs/id"
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        },
+        "guard_condition": {
+          "$ref": "#/$defs/guard_condition"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["target_id"],
+          "not": {
+            "required": ["guard_condition"]
+          }
+        },
+        {
+          "required": ["guard_condition"],
+          "not": {
+            "required": ["target_id"]
+          }
+        }
+      ]
+    },
+    "internal_transition": {
+      "description": "Internal handler that consumes an event without changing active state.",
+      "type": "object",
+      "required": ["event_id", "activities"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
+        }
+      }
+    },
+    "state": {
+      "description": "State with optional nested states, hooks, and transitions.",
+      "type": "object",
+      "required": [
+        "id",
+        "label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state"
+          }
+        },
+        "hooks": {
+          "$ref": "#/$defs/hooks"
+        },
+        "initial_transition": {
+          "$ref": "#/$defs/initial_transition"
+        },
+        "external_transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/external_transition"
+          }
+        },
+        "internal_transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/internal_transition"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["initial_transition"]
+          },
+          "then": {
+            "required": ["states"],
+            "properties": {
+              "states": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

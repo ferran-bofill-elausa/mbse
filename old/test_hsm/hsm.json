@@ -1,0 +1,161 @@
+{
+  "schema_version": "hsm-v1",
+  "document_id": "behavior_trace_machine",
+  "variables": [
+    { "id": "trace", "default": [] },
+    { "id": "job_queue", "default": 0 },
+    { "id": "completed_jobs", "default": 0 },
+    { "id": "health_checks", "default": 0 },
+    { "id": "refresh_count", "default": 0 },
+    { "id": "idle_entries", "default": 0 },
+    { "id": "idle_exits", "default": 0 },
+    { "id": "active_entries", "default": 0 },
+    { "id": "active_exits", "default": 0 },
+    { "id": "selected_job", "default": null },
+    { "id": "session_status", "default": "booting" },
+    { "id": "session_phase", "default": "booting" },
+    { "id": "shutdown_reason", "default": null },
+    { "id": "last_action", "default": "machine.created" }
+  ],
+  "events": [
+    { "id": "ping_evt", "parameters": [] },
+    { "id": "start_evt", "parameters": [] },
+    { "id": "refresh_evt", "parameters": [] },
+    { "id": "stop_evt", "parameters": [] },
+    { "id": "shutdown_evt", "parameters": [] }
+  ],
+  "initial_transition": {
+    "id": "machine_init",
+    "target_id": "session"
+  },
+  "states": [
+    {
+      "id": "session",
+      "label": "Session",
+      "states": [
+        {
+          "id": "idle",
+          "label": "Idle",
+          "states": [],
+          "hooks": {
+            "on_initial": [],
+            "on_entry": [
+              { "module": "test_hsm.activities", "name": "idle_ready" }
+            ],
+            "on_exit": [
+              { "module": "test_hsm.activities", "name": "idle_leave" }
+            ]
+          },
+          "external_transitions": [
+            {
+              "id": "idle_to_job_check",
+              "event_id": "start_evt",
+              "guard": {
+                "id": "job_check",
+                "guard": {
+                  "module": "test_hsm.activities",
+                  "name": "can_start_processing"
+                },
+                "true_branch": {
+                  "target_id": "active",
+                  "activities": [
+                    { "module": "test_hsm.activities", "name": "start_processing_job" }
+                  ]
+                },
+                "false_branch": {
+                  "target_id": "idle",
+                  "activities": [
+                    { "module": "test_hsm.activities", "name": "guard_stay_idle" }
+                  ]
+                }
+              }
+            }
+          ],
+          "internal_transitions": [
+            {
+              "id": "idle_ping_internal",
+              "event_id": "ping_evt",
+              "activities": [
+                { "module": "test_hsm.activities", "name": "idle_health_check" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "active",
+          "label": "Active",
+          "states": [],
+          "hooks": {
+            "on_initial": [],
+            "on_entry": [
+              { "module": "test_hsm.activities", "name": "active_processing" }
+            ],
+            "on_exit": [
+              { "module": "test_hsm.activities", "name": "active_pause" }
+            ]
+          },
+          "external_transitions": [
+            {
+              "id": "active_refresh",
+              "target_id": "active",
+              "event_id": "refresh_evt",
+              "activities": [
+                { "module": "test_hsm.activities", "name": "refresh_active_job" }
+              ]
+            },
+            {
+              "id": "active_to_idle",
+              "target_id": "idle",
+              "event_id": "stop_evt",
+              "activities": [
+                { "module": "test_hsm.activities", "name": "complete_active_job" }
+              ]
+            }
+          ],
+          "internal_transitions": []
+        }
+      ],
+      "hooks": {
+        "on_initial": [
+          { "module": "test_hsm.activities", "name": "session_choose_initial_phase" },
+          { "module": "test_hsm.activities", "name": "session_select_first_job" }
+        ],
+        "on_entry": [
+          { "module": "test_hsm.activities", "name": "session_open" }
+        ],
+        "on_exit": [
+          { "module": "test_hsm.activities", "name": "session_close" }
+        ]
+      },
+      "initial_transition": {
+        "id": "session_init",
+        "target_id": "idle"
+      },
+      "external_transitions": [
+        {
+          "id": "session_to_shutdown",
+          "target_id": "shutdown",
+          "event_id": "shutdown_evt",
+          "activities": [
+            { "module": "test_hsm.activities", "name": "shutdown_session" }
+          ]
+        }
+      ],
+      "internal_transitions": []
+    },
+    {
+      "id": "shutdown",
+      "label": "Shutdown",
+      "states": [],
+      "hooks": {
+        "on_initial": [],
+        "on_entry": [
+          { "module": "test_hsm.activities", "name": "shutdown_archive" }
+        ],
+        "on_exit": []
+      },
+      "external_transitions": [],
+      "internal_transitions": []
+    }
+  ]
+}
