@@ -11,3 +11,6 @@ if str(ROOT) not in sys.path:
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
+
+# TODO: Replace these sys.path tweaks by making the project installable and
+# running tests against an editable install (`pip install -e .`).

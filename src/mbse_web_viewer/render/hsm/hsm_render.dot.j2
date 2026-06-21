@@ -1,0 +1,82 @@
+digraph "{{ view.document_id }}" {
+  rankdir=LR;
+  compound=true;
+  graph [nodesep=0.45, ranksep=0.65];
+{% macro render_fragment_cell(fragment) -%}
+{%- if fragment.target_payload -%}
+<TD ALIGN="LEFT" HREF="" TOOLTIP="{{ fragment.target_payload|e }}">{{ fragment.text|e }}</TD>
+{%- else -%}
+<TD ALIGN="LEFT">{{ fragment.text|e }}</TD>
+{%- endif -%}
+{%- endmacro %}
+{% macro render_text_line(line) -%}
+<TR><TD ALIGN="LEFT"><TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR>{%- for fragment in line.fragments %}{{ render_fragment_cell(fragment) }}{%- endfor %}</TR></TABLE></TD></TR>
+{%- endmacro %}
+{% macro render_state_body(sections) -%}
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+{%- for section in sections %}
+{{ render_text_line(section.title_line) }}
+{%- for line in section.lines %}
+{{ render_text_line(line) }}
+{%- endfor %}
+{%- endfor %}
+</TABLE>
+{%- endmacro %}
+{% macro render_edge_label(label_line) -%}
+<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+{{ render_text_line(label_line) }}
+</TABLE>
+>
+{%- endmacro %}
+{% macro render_state_label(state) -%}
+<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6">
+  <TR><TD BGCOLOR="{{ state.fill_rgb }}"><B>{{ state.title_text|e }}</B></TD></TR>
+{%- if state.body_sections %}
+  <TR><TD ALIGN="LEFT" BALIGN="LEFT">{{ render_state_body(state.body_sections) }}</TD></TR>
+{%- else %}
+  <TR><TD ALIGN="LEFT">&#160;</TD></TR>
+{%- endif %}
+</TABLE>
+>
+{%- endmacro %}
+{% for helper in view.routing_helpers if helper.parent_svg_id is none %}
+{% if helper.visibility == "visible_source" %}
+  "{{ helper.id }}" [id="{{ helper.id }}", shape=point, label="", width=0.1, height=0.1, fixedsize=true, style=filled, fillcolor=black, color=black];
+{% else %}
+  "{{ helper.id }}" [shape=point, label="", width=0.1, height=0.1, fixedsize=true, style=invis];
+{% endif %}
+{% endfor %}
+{% macro render_states(parent_svg_id) -%}
+{% for state in view.state_nodes if state.parent_svg_id == parent_svg_id %}
+{% if state.child_state_svg_ids %}
+  subgraph "cluster_{{ state.svg_id }}" {
+    id="{{ state.svg_id }}";
+    bgcolor="{{ state.fill_rgb }}";
+    label={{ render_state_label(state) }};
+{% for helper in view.routing_helpers if helper.parent_svg_id == state.svg_id %}
+{% if helper.visibility == "visible_source" %}
+    "{{ helper.id }}" [id="{{ helper.id }}", shape=point, label="", width=0.1, height=0.1, fixedsize=true, style=filled, fillcolor=black, color=black];
+{% else %}
+    "{{ helper.id }}" [shape=point, label="", width=0.1, height=0.1, fixedsize=true, style=invis];
+{% endif %}
+{% endfor %}
+{{ render_states(state.svg_id) }}
+  }
+{% else %}
+  "{{ state.svg_id }}" [id="{{ state.svg_id }}", shape=box, label={{ render_state_label(state) }}, style="filled", fillcolor="{{ state.fill_rgb }}"];
+{% endif %}
+{% endfor %}
+{%- endmacro %}
+{{ render_states(none) }}
+{% for guard in view.guard_nodes %}
+  "{{ guard.svg_id }}" [id="{{ guard.svg_id }}", shape=diamond, label="", xlabel="{{ guard.title_text|e }}"];
+{% endfor %}
+{% for edge in view.initial_edges %}
+  "{{ edge.source_id }}" -> "{{ edge.target_id }}" [id="{{ edge.svg_id }}", label=""{% if edge.source_cluster_svg_id %}, ltail="cluster_{{ edge.source_cluster_svg_id }}"{% endif %}{% if edge.target_cluster_svg_id %}, lhead="cluster_{{ edge.target_cluster_svg_id }}"{% endif %}];
+{% endfor %}
+{% for edge in view.transition_edges %}
+  "{{ edge.source_id }}" -> "{{ edge.target_id }}" [id="{{ edge.svg_id }}", {% if edge.label_line %}label={{ render_edge_label(edge.label_line) }}{% else %}label=""{% endif %}{% if edge.source_cluster_svg_id %}, ltail="cluster_{{ edge.source_cluster_svg_id }}"{% endif %}{% if edge.target_cluster_svg_id %}, lhead="cluster_{{ edge.target_cluster_svg_id }}"{% endif %}];
+{% endfor %}
+}

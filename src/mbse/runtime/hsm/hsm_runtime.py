@@ -31,6 +31,8 @@ class HsmRuntimeInitialTransition(TypedDict):
   """Trace entry for one initial transition."""
 
   kind: Literal["initial_transition"]
+  source_state_id: str | None
+  source_state_label: str | None
   target_state_id: str
   target_state_label: str
 
@@ -39,6 +41,8 @@ class HsmRuntimeExternalTransition(TypedDict):
   """Trace entry for one external transition."""
 
   kind: Literal["external_transition"]
+  source_state_id: str
+  source_state_label: str
   target_state_id: str
   target_state_label: str
 
@@ -47,12 +51,16 @@ class HsmRuntimeInternalTransition(TypedDict):
   """Trace entry for one internal transition."""
 
   kind: Literal["internal_transition"]
+  source_state_id: str
+  source_state_label: str
 
 
 class HsmRuntimeGuardCondition(TypedDict):
   """Trace entry for one resolved guard condition."""
 
   kind: Literal["guard_condition"]
+  source_state_id: str
+  source_state_label: str
   guard_activity: HsmRuntimeCallableRef
   result: bool
   target_state_id: str
@@ -63,6 +71,9 @@ class HsmRuntimeActivity(TypedDict):
   """Trace entry for one transition activity execution."""
 
   kind: Literal["activity"]
+  source_state_id: str
+  source_state_label: str
+  activity_owner: Literal["internal_transition", "external_transition", "guard_branch"]
   activity: HsmRuntimeCallableRef
 
 
@@ -70,6 +81,8 @@ class HsmRuntimeOnEntry(TypedDict):
   """Trace entry for one on_entry hook execution."""
 
   kind: Literal["on_entry"]
+  source_state_id: str
+  source_state_label: str
   activity: HsmRuntimeCallableRef
 
 
@@ -77,6 +90,8 @@ class HsmRuntimeOnInitial(TypedDict):
   """Trace entry for one on_initial hook execution."""
 
   kind: Literal["on_initial"]
+  source_state_id: str
+  source_state_label: str
   activity: HsmRuntimeCallableRef
 
 
@@ -84,6 +99,8 @@ class HsmRuntimeOnExit(TypedDict):
   """Trace entry for one on_exit hook execution."""
 
   kind: Literal["on_exit"]
+  source_state_id: str
+  source_state_label: str
   activity: HsmRuntimeCallableRef
 
 
@@ -108,6 +125,8 @@ class HsmRuntimePendingGuardCondition(TypedDict):
   """
 
   kind: Literal["pending_guard_condition"]
+  source_state_id: str
+  source_state_label: str
   guard_activity: HsmRuntimeCallableRef
   true_target_state_id: str
   true_target_state_label: str
@@ -150,6 +169,8 @@ class HsmRuntime:
   """Mutable HSM runtime instance."""
 
   def __init__(self) -> None:
+    """HsmRuntime initialization."""
+
     self.model: HsmModel | None = None
     self.mode = "rtc"
     self.current_state_id: str | None = None
@@ -250,6 +271,8 @@ class HsmRuntime:
         self.execution_log[-1]["entries"].append(
           {
             "kind": "guard_condition",
+            "source_state_id": entry["source_state_id"],
+            "source_state_label": entry["source_state_label"],
             "guard_activity": entry["guard_activity"],
             "result": guard_result,
             "target_state_id": target_state_id,
@@ -346,46 +369,94 @@ class HsmRuntime:
     entries.append(
       {
         "kind": "external_transition",
+        "source_state_id": source_state_id,
+        "source_state_label": model.getStateLabel(source_state_id),
         "target_state_id": target_state_id,
         "target_state_label": model.getStateLabel(target_state_id),
       }
     )
 
+    for activity in external_transition.get("activities", []):
+      entries.append(
+        {
+          "kind": "activity",
+          "source_state_id": source_state_id,
+          "source_state_label": model.getStateLabel(source_state_id),
+          "activity_owner": "external_transition",
+          "activity": activity,
+        }
+      )
+
+    for activity in branch_activities:
+      entries.append(
+        {
+          "kind": "activity",
+          "source_state_id": source_state_id,
+          "source_state_label": model.getStateLabel(source_state_id),
+          "activity_owner": "guard_branch",
+          "activity": activity,
+        }
+      )
+
     # Exit from the active leaf up to the state that actually owns the transition.
     aux_state_id = current_state_id
     while aux_state_id != source_state_id:
       for activity in model.getStateHooks(aux_state_id).get("on_exit", []):
-        entries.append({"kind": "on_exit", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_exit",
+            "source_state_id": aux_state_id,
+            "source_state_label": model.getStateLabel(aux_state_id),
+            "activity": activity,
+          }
+        )
       aux_state_id = model.getParentStateId(aux_state_id)
 
     exit_path, entry_path = self._getTransitionPath(source_state_id, target_state_id)
 
-    # Exit/entry path handling mirrors EDF_hsm_executeTransition().
+    # Exit and entry hooks follow the same transition path computed below.
     for exit_state_id in exit_path:
       for activity in model.getStateHooks(exit_state_id).get("on_exit", []):
-        entries.append({"kind": "on_exit", "activity": activity})
-
-    for activity in external_transition.get("activities", []):
-      entries.append({"kind": "activity", "activity": activity})
-
-    for activity in branch_activities:
-      entries.append({"kind": "activity", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_exit",
+            "source_state_id": exit_state_id,
+            "source_state_label": model.getStateLabel(exit_state_id),
+            "activity": activity,
+          }
+        )
 
     for entry_state_id in reversed(entry_path):
       for activity in model.getStateHooks(entry_state_id).get("on_entry", []):
-        entries.append({"kind": "on_entry", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_entry",
+            "source_state_id": entry_state_id,
+            "source_state_label": model.getStateLabel(entry_state_id),
+            "activity": activity,
+          }
+        )
 
     current_target_state_id = target_state_id
 
     # Once the target is entered, keep descending through local initials.
     while model.hasStateInitialTransition(current_target_state_id):
       for activity in model.getStateHooks(current_target_state_id).get("on_initial", []):
-        entries.append({"kind": "on_initial", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_initial",
+            "source_state_id": current_target_state_id,
+            "source_state_label": model.getStateLabel(current_target_state_id),
+            "activity": activity,
+          }
+        )
 
       next_target_state_id = model.getStateInitialTargetId(current_target_state_id)
       entries.append(
         {
           "kind": "initial_transition",
+          "source_state_id": current_target_state_id,
+          "source_state_label": model.getStateLabel(current_target_state_id),
           "target_state_id": next_target_state_id,
           "target_state_label": model.getStateLabel(next_target_state_id),
         }
@@ -399,7 +470,14 @@ class HsmRuntime:
 
       for entry_state_id in reversed(nested_entry_path):
         for activity in model.getStateHooks(entry_state_id).get("on_entry", []):
-          entries.append({"kind": "on_entry", "activity": activity})
+          entries.append(
+            {
+              "kind": "on_entry",
+              "source_state_id": entry_state_id,
+              "source_state_label": model.getStateLabel(entry_state_id),
+              "activity": activity,
+            }
+          )
 
       current_target_state_id = next_target_state_id
 
@@ -416,13 +494,15 @@ class HsmRuntime:
     entries.append(
       {
         "kind": "initial_transition",
+        "source_state_id": None,
+        "source_state_label": None,
         "target_state_id": target_state_id,
         "target_state_label": model.getStateLabel(target_state_id),
       }
     )
 
     entry_path = [target_state_id]
-    # Build the entry path upward, then replay it downward like EDF_hsm_start().
+    # Build the entry path upward, then replay it downward during initialization.
     parent_state_id = model.getParentStateId(target_state_id)
     while parent_state_id is not None:
       entry_path.append(parent_state_id)
@@ -430,18 +510,34 @@ class HsmRuntime:
 
     for state_id in reversed(entry_path):
       for activity in model.getStateHooks(state_id).get("on_entry", []):
-        entries.append({"kind": "on_entry", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_entry",
+            "source_state_id": state_id,
+            "source_state_label": model.getStateLabel(state_id),
+            "activity": activity,
+          }
+        )
 
     current_state_id = target_state_id
     # Repeat local initial descent until reaching the final active leaf.
     while model.hasStateInitialTransition(current_state_id):
       for activity in model.getStateHooks(current_state_id).get("on_initial", []):
-        entries.append({"kind": "on_initial", "activity": activity})
+        entries.append(
+          {
+            "kind": "on_initial",
+            "source_state_id": current_state_id,
+            "source_state_label": model.getStateLabel(current_state_id),
+            "activity": activity,
+          }
+        )
 
       target_state_id = model.getStateInitialTargetId(current_state_id)
       entries.append(
         {
           "kind": "initial_transition",
+          "source_state_id": current_state_id,
+          "source_state_label": model.getStateLabel(current_state_id),
           "target_state_id": target_state_id,
           "target_state_label": model.getStateLabel(target_state_id),
         }
@@ -455,7 +551,14 @@ class HsmRuntime:
 
       for state_id in reversed(entry_path):
         for activity in model.getStateHooks(state_id).get("on_entry", []):
-          entries.append({"kind": "on_entry", "activity": activity})
+          entries.append(
+            {
+              "kind": "on_entry",
+              "source_state_id": state_id,
+              "source_state_label": model.getStateLabel(state_id),
+              "activity": activity,
+            }
+          )
 
       current_state_id = target_state_id
 
@@ -464,7 +567,7 @@ class HsmRuntime:
     self.execution_log.append({"event": event, "entries": []})
 
   def _planEvent(self, event: HsmRuntimeEvent) -> bool:
-    """Plan one event from the active leaf using EDF-compatible semantics."""
+    """Plan one event from the active leaf using the runtime transition rules."""
 
     current_state_id = self.current_state_id
     if current_state_id is None:
@@ -478,9 +581,23 @@ class HsmRuntime:
     while state_id is not None:
       internal_transition = model.findInternalTransition(state_id, event["event_id"])
       if internal_transition is not None:
-        entries.append({"kind": "internal_transition"})
+        entries.append(
+          {
+            "kind": "internal_transition",
+            "source_state_id": state_id,
+            "source_state_label": model.getStateLabel(state_id),
+          }
+        )
         for activity in internal_transition.get("activities", []):
-          entries.append({"kind": "activity", "activity": activity})
+          entries.append(
+            {
+              "kind": "activity",
+              "source_state_id": state_id,
+              "source_state_label": model.getStateLabel(state_id),
+              "activity_owner": "internal_transition",
+              "activity": activity,
+            }
+          )
 
         self.pending_execution = {"event": event, "entries": entries}
         # Prepare the log trace now so step() can append executed entries in order.
@@ -503,6 +620,8 @@ class HsmRuntime:
         entries.append(
           {
             "kind": "pending_guard_condition",
+            "source_state_id": source_state_id,
+            "source_state_label": model.getStateLabel(source_state_id),
             "guard_activity": guard_condition["guard_activity"],
             "true_target_state_id": true_branch["target_id"],
             "true_target_state_label": model.getStateLabel(true_branch["target_id"]),
@@ -558,7 +677,7 @@ class HsmRuntime:
     source_state_id: str,
     target_state_id: str,
   ) -> tuple[list[str], list[str]]:
-    """Compute the EDF-compatible exit path and entry path."""
+    """Compute the exit path and entry path for one external transition."""
 
     model = self._requireModel()
     t_found = False
@@ -681,6 +800,8 @@ class HsmRuntime:
     return result
 
   def _requireModel(self) -> HsmModel:
+    """Return the initialized model or fail if the runtime is uninitialized."""
+
     if self.model is None:
       raise RuntimeError("Runtime has not been initialized with a model.")
     return self.model

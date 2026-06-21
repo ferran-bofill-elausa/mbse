@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MBSE Viewer</title>
+    <link rel="stylesheet" href="/viewer.css" />
+  </head>
+  <body class="workbench-page" id="workbench-page">
+    <main class="layout" id="layout">
+      <aside class="panel sidebar">
+        <section class="sidebar-section" aria-labelledby="state-heading">
+          <h2 id="state-heading">State</h2>
+          <div class="state-box" id="state-box"></div>
+        </section>
+
+        <section class="sidebar-section" aria-labelledby="reset-heading">
+          <h2 id="reset-heading">Reset</h2>
+          <div class="reset-row">
+            <form id="reset-form">
+              <button type="submit">Reset runtime</button>
+            </form>
+            <button id="reset-view-button" type="button">Reset view</button>
+          </div>
+        </section>
+
+        <section class="sidebar-section" aria-labelledby="view-heading">
+          <h2 id="view-heading">View</h2>
+          <form id="view-mode-form">
+            <label for="view-mode-select">Mode</label>
+            <select id="view-mode-select" name="view_mode">
+              <option value="normal">Normal</option>
+              <option value="focus">Focus current state</option>
+            </select>
+          </form>
+        </section>
+
+        <section class="sidebar-section" aria-labelledby="events-heading">
+          <h2 id="events-heading">Events</h2>
+          <form id="event-form">
+            <label for="event-select">Event</label>
+            <select id="event-select" name="event_id"></select>
+            <div id="event-parameter-list"></div>
+            <button type="submit">Send event</button>
+          </form>
+        </section>
+
+        <section class="sidebar-section" aria-labelledby="variables-heading">
+          <h2 id="variables-heading">Variables</h2>
+          <div id="variable-list"></div>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="trace-panel" id="trace-panel">
+            <summary>Execution Log</summary>
+            <div class="trace-box" id="trace-box"></div>
+          </details>
+        </section>
+      </aside>
+
+      <div id="layout-splitter" class="layout-splitter" aria-hidden="true"></div>
+
+      <section class="panel diagram-panel">
+        <div id="svg-viewport">
+          <div id="svg-stage">
+            <div id="svg-root"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/viewer.js"></script>
+  </body>
+</html>
