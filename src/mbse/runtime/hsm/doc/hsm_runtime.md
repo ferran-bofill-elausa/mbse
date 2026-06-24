@@ -2,18 +2,13 @@
 
 This package executes a validated `HsmModel` as a hierarchical state machine with queued events, mutable variables, and execution tracing.
 
-## Modes
-
-- `rtc`: plans and executes until the current event is fully completed.
-- `step`: exposes execution one planned entry at a time through `step()`.
-
 ## Initialization semantics
 
 Initialization is planned as a trace with `event_id = null`.
 
-- The root `initial_transition` is taken first.
+- The root `initial_transition` is planned first.
 - Entry hooks run from outermost entered state to innermost entered state.
-- For each entered composite state with a local `initial_transition`, `on_initial` hooks run before descending to the target child.
+- For each entered composite state with a local `initial_transition`, its activities are recorded on that transition before descending to the target child.
 - Nested initial descent repeats until the final active leaf is reached.
 
 ## Event resolution
@@ -34,7 +29,7 @@ For one chosen external transition branch, execution order is:
 4. Run `on_exit` hooks from the current active leaf up to the state that owns the transition.
 5. Run `on_exit` hooks along the computed exit path toward the target.
 6. Run `on_entry` hooks along the entry path toward the target.
-7. If the target has local initial transitions, repeat `on_initial`, nested initial transition, and nested `on_entry` until the final leaf is reached.
+7. If the target has local initial transitions, repeat initial transition activities, nested initial transition, and nested `on_entry` until the final leaf is reached.
 
 ## Guard semantics
 
@@ -57,6 +52,7 @@ After each callable returns, any updated variable attributes are persisted back 
 
 ## State updates and tracing
 
-- `current_state_id` is updated only after the full planned trace completes.
-- The final active state is the last recorded `initial_transition` or `external_transition` target in that trace.
+- `current_state_id` changes only when the runtime executes an explicit `change_active_state` step.
+- `change_active_state` is planned only when one trace reaches a real new active state.
+- This explicit state-change step closes one event trace before any later queued event starts.
 - The execution log is append-only and preserves event reception order.

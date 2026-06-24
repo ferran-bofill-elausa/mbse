@@ -94,7 +94,6 @@ def buildStateNodes(
     body_sections = _formatStateBodySections(
       state_id,
       model.getStateOnEntry(state_id),
-      model.getStateOnInitial(state_id),
       model.getStateOnExit(state_id),
       internal_transitions,
       event_labels,
@@ -139,6 +138,7 @@ def prepareInitialEdge(
   source_cluster_svg_id: str | None,
   target_state_id: str,
   svg_id: str,
+  label_line: types.RenderTextLine | None,
   state_ids_by_state_id: dict[str, str],
   compound_state_ids: set[str],
   routing_helpers: RoutingHelperRegistry,
@@ -155,6 +155,7 @@ def prepareInitialEdge(
     svg_id=svg_id,
     source_id=source_id,
     target_id=target_id,
+    label_line=label_line,
     source_cluster_svg_id=source_cluster_svg_id,
     target_cluster_svg_id=target_cluster_svg_id,
   )
@@ -255,27 +256,20 @@ def _routeStateEndpoint(
 def _formatStateBodySections(
   state_id: str,
   on_entry: list[dict[str, str]],
-  on_initial: list[dict[str, str]],
   on_exit: list[dict[str, str]],
   internal_transitions: list[types.InternalTransitionSpec],
   event_labels: dict[str, str],
 ) -> tuple[types.RenderStateSection, ...]:
-  """Format lifecycle hooks and internal transitions for one state body."""
+  """Format state hooks and internal transitions for one state body."""
 
   sections: list[types.RenderStateSection] = []
-  _appendLifecycleSection(
+  _appendStateHookSection(
     sections,
     state_id=state_id,
     section_name="on_entry",
     activities=on_entry,
   )
-  _appendLifecycleSection(
-    sections,
-    state_id=state_id,
-    section_name="on_initial",
-    activities=on_initial,
-  )
-  _appendLifecycleSection(
+  _appendStateHookSection(
     sections,
     state_id=state_id,
     section_name="on_exit",
@@ -302,14 +296,14 @@ def _formatStateBodySections(
   return tuple(sections)
 
 
-def _appendLifecycleSection(
+def _appendStateHookSection(
   sections: list[types.RenderStateSection],
   *,
   state_id: str,
   section_name: str,
   activities: list[dict[str, str]],
 ) -> None:
-  """Append one lifecycle section if the authored state declares it."""
+  """Append one state-hook section if the authored state declares it."""
 
   if not activities:
     return
@@ -320,7 +314,7 @@ def _appendLifecycleSection(
         fragments=(
           types.RenderTextFragment(
             text=f"{section_name}:",
-            target_payload=f"lifecycle_section|{state_id}|{section_name}",
+            target_payload=f"state_hook_section|{state_id}|{section_name}",
           ),
         )
       ),
@@ -328,7 +322,7 @@ def _appendLifecycleSection(
         _activityBulletLine(
           activity=activity,
           target_payload=(
-            f"lifecycle_activity|{state_id}|{section_name}|{callableKey(activity)}"
+            f"state_hook_activity|{state_id}|{section_name}|{callableKey(activity)}"
           ),
         )
         for activity in activities
@@ -417,6 +411,30 @@ def formatExternalTransitionLabel(
     )
   )
   return types.RenderTextLine(fragments=tuple(fragments))
+
+
+def formatInitialTransitionLabel(
+  edge_id: str,
+  activities: list[dict[str, str]],
+) -> types.RenderTextLine | None:
+  """Format the label for one initial transition edge."""
+
+  if not activities:
+    return None
+
+  return types.RenderTextLine(
+    fragments=(
+      types.RenderTextFragment(
+        text="/ ",
+        target_payload=f"initial_transition_label|{edge_id}",
+      ),
+      *_activityFragments(
+        edge_id,
+        activities,
+        payload_prefix="initial_transition_activity",
+      ),
+    )
+  )
 
 
 def formatGuardBranchLabel(
@@ -633,10 +651,13 @@ class TextTargetCollector:
     """Initialize empty text-target buckets for all supported highlight kinds."""
 
     self._next_fragment_index = 1
-    self._lifecycle_section_ids: dict[tuple[str, str], list[str]] = {}
-    self._lifecycle_activity_ids: dict[tuple[str, str, str], list[str]] = {}
+    self._state_hook_section_ids: dict[tuple[str, str], list[str]] = {}
+    self._state_hook_activity_ids: dict[tuple[str, str, str], list[str]] = {}
+    self._initial_transition_label_ids: dict[str, list[str]] = {}
+    self._initial_transition_activity_ids: dict[tuple[str, str], list[str]] = {}
     self._external_transition_label_ids: dict[str, list[str]] = {}
     self._external_transition_activity_ids: dict[tuple[str, str], list[str]] = {}
+    self._guard_node_text_ids: dict[tuple[str, str], list[str]] = {}
     self._internal_transition_section_ids: dict[str, list[str]] = {}
     self._internal_transition_event_ids: dict[str, list[str]] = {}
     self._internal_transition_activity_ids: dict[tuple[str, str], list[str]] = {}
@@ -653,14 +674,23 @@ class TextTargetCollector:
 
     parts = payload.split("|")
     kind = parts[0]
-    if kind == "lifecycle_section" and len(parts) == 3:
-      self._lifecycle_section_ids.setdefault((parts[1], parts[2]), []).append(
+    if kind == "state_hook_section" and len(parts) == 3:
+      self._state_hook_section_ids.setdefault((parts[1], parts[2]), []).append(
         fragment_id
       )
       return
-    if kind == "lifecycle_activity" and len(parts) == 4:
-      self._lifecycle_activity_ids.setdefault(
+    if kind == "state_hook_activity" and len(parts) == 4:
+      self._state_hook_activity_ids.setdefault(
         (parts[1], parts[2], parts[3]),
+        [],
+      ).append(fragment_id)
+      return
+    if kind == "initial_transition_label" and len(parts) == 2:
+      self._initial_transition_label_ids.setdefault(parts[1], []).append(fragment_id)
+      return
+    if kind == "initial_transition_activity" and len(parts) == 3:
+      self._initial_transition_activity_ids.setdefault(
+        (parts[1], parts[2]),
         [],
       ).append(fragment_id)
       return
@@ -672,6 +702,9 @@ class TextTargetCollector:
         (parts[1], parts[2]),
         [],
       ).append(fragment_id)
+      return
+    if kind == "guard_node_text" and len(parts) == 3:
+      self._guard_node_text_ids.setdefault((parts[1], parts[2]), []).append(fragment_id)
       return
     if kind == "internal_transition_section" and len(parts) == 2:
       self._internal_transition_section_ids.setdefault(parts[1], []).append(fragment_id)
@@ -689,13 +722,21 @@ class TextTargetCollector:
     """Freeze the collected text-target maps into tuples for public use."""
 
     return types.NormalizedSvgTextTargets(
-      lifecycle_section_ids={
+      state_hook_section_ids={
         key: tuple(value)
-        for key, value in self._lifecycle_section_ids.items()
+        for key, value in self._state_hook_section_ids.items()
       },
-      lifecycle_activity_ids={
+      state_hook_activity_ids={
         key: tuple(value)
-        for key, value in self._lifecycle_activity_ids.items()
+        for key, value in self._state_hook_activity_ids.items()
+      },
+      initial_transition_label_ids={
+        key: tuple(value)
+        for key, value in self._initial_transition_label_ids.items()
+      },
+      initial_transition_activity_ids={
+        key: tuple(value)
+        for key, value in self._initial_transition_activity_ids.items()
       },
       external_transition_label_ids={
         key: tuple(value)
@@ -704,6 +745,10 @@ class TextTargetCollector:
       external_transition_activity_ids={
         key: tuple(value)
         for key, value in self._external_transition_activity_ids.items()
+      },
+      guard_node_text_ids={
+        key: tuple(value)
+        for key, value in self._guard_node_text_ids.items()
       },
       internal_transition_section_ids={
         key: tuple(value)

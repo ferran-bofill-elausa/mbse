@@ -13,13 +13,16 @@ class HsmSvgHighlightIndex:
   state_ids_by_state_id: dict[str, str]
   initial_transition_ids_by_owner_id: dict[str | None, str]
   initial_transition_source_ids_by_owner_id: dict[str | None, str]
+  initial_transition_label_text_ids: dict[str, tuple[str, ...]]
+  initial_transition_activity_text_ids: dict[tuple[str, str], tuple[str, ...]]
   external_transition_ids_by_key: dict[tuple[str, str, str], tuple[str, ...]]
   guarded_transition_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
   guard_node_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
   guard_branch_ids_by_key: dict[tuple[str, str, bool, str], tuple[str, ...]]
+  guard_node_text_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
   internal_transition_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
-  lifecycle_section_text_ids: dict[tuple[str, str], tuple[str, ...]]
-  lifecycle_activity_text_ids: dict[tuple[str, str, str], tuple[str, ...]]
+  state_hook_section_text_ids: dict[tuple[str, str], tuple[str, ...]]
+  state_hook_activity_text_ids: dict[tuple[str, str, str], tuple[str, ...]]
   external_transition_label_text_ids: dict[str, tuple[str, ...]]
   external_transition_activity_text_ids: dict[tuple[str, str], tuple[str, ...]]
   internal_transition_section_text_ids: dict[tuple[str, str], tuple[str, ...]]
@@ -69,7 +72,7 @@ class RenderGuardNode:
   """Prepared guard node data consumed directly by the DOT template."""
 
   svg_id: str
-  title_text: str
+  title_line: RenderTextLine
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,7 @@ class RenderInitialEdge:
   svg_id: str
   source_id: str
   target_id: str
+  label_line: RenderTextLine | None
   source_cluster_svg_id: str | None
   target_cluster_svg_id: str | None
 
@@ -149,10 +153,13 @@ class InternalTransitionSpec:
 class NormalizedSvgTextTargets:
   """Resolved text-fragment ids derived from Graphviz SVG output."""
 
-  lifecycle_section_ids: dict[tuple[str, str], tuple[str, ...]]
-  lifecycle_activity_ids: dict[tuple[str, str, str], tuple[str, ...]]
+  state_hook_section_ids: dict[tuple[str, str], tuple[str, ...]]
+  state_hook_activity_ids: dict[tuple[str, str, str], tuple[str, ...]]
+  initial_transition_label_ids: dict[str, tuple[str, ...]]
+  initial_transition_activity_ids: dict[tuple[str, str], tuple[str, ...]]
   external_transition_label_ids: dict[str, tuple[str, ...]]
   external_transition_activity_ids: dict[tuple[str, str], tuple[str, ...]]
+  guard_node_text_ids: dict[tuple[str, str], tuple[str, ...]]
   internal_transition_section_ids: dict[str, tuple[str, ...]]
   internal_transition_event_ids: dict[str, tuple[str, ...]]
   internal_transition_activity_ids: dict[tuple[str, str], tuple[str, ...]]

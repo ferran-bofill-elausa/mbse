@@ -26,7 +26,7 @@ After rendering, it exposes:
 - external transitions
 - guard nodes and guard branches
 - internal transitions
-- lifecycle text for `on_entry`, `on_initial`, `on_exit` and `activities`
+- state-hook text for `on_entry`, `on_exit`.
 - external and internal transition text fragments
 
 ## Id derivation

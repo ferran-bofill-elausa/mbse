@@ -345,6 +345,12 @@
       "properties": {
         "target_id": {
           "$ref": "#/$defs/id"
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/callable_ref"
+          }
         }
       }
     },
@@ -354,12 +360,6 @@
       "additionalProperties": false,
       "properties": {
         "on_entry": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/callable_ref"
-          }
-        },
-        "on_initial": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/callable_ref"

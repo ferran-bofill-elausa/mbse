@@ -6,6 +6,8 @@ const DEFAULT_SIDEBAR_WIDTH_PX = 288;
 const ACTIVE_STATE_CLASS = "is-active-state";
 const ACTIVE_TRANSITION_CLASS = "is-active-transition";
 const ACTIVE_TEXT_CLASS = "is-active-text";
+const CURRENT_STEP_CLASS = "is-current-step";
+const CURRENT_STEP_TEXT_CLASS = "is-current-step-text";
 const FOCUS_RELATED_CLASS = "is-focus-related";
 const FOCUS_DIMMED_CLASS = "is-focus-dimmed";
 const PAN_ACTIVE_CLASS = "is-pan-active";
@@ -19,10 +21,17 @@ const viewerState = {
   dragStartScrollTop: 0,
   sidebarWidthPx: DEFAULT_SIDEBAR_WIDTH_PX,
   viewMode: "normal",
-  focusRelatedIds: [],
+  autoCenterEnabled: true,
+  focusStateRelatedIds: [],
+  focusTraceRelatedIds: [],
+  viewportStateFocusIds: [],
+  viewportTraceFocusIds: [],
+  lastAutoCenteredFocusKey: null,
   sessionEvents: [],
   sessionEnums: [],
   sessionVariables: [],
+  isPaused: true,
+  hasPendingExecution: false,
   eventDraftEventId: null,
   eventDraftParameters: null,
   fitBaseline: {
@@ -50,6 +59,7 @@ async function loadSession() {
   wireResetForm();
   wireResetViewButton();
   wireViewModeForm();
+  wireDebuggerControls();
   wireEventForm();
   wireLayoutSplitter();
   wireViewportZoom();
@@ -89,10 +99,36 @@ function wireResetViewButton() {
  */
 function wireViewModeForm() {
   const select = document.getElementById("view-mode-select");
+  const autoCenterCheckbox = document.getElementById("auto-center-checkbox");
   select.value = viewerState.viewMode;
+  autoCenterCheckbox.checked = viewerState.autoCenterEnabled;
   select.addEventListener("change", () => {
     viewerState.viewMode = select.value;
+    viewerState.lastAutoCenteredFocusKey = null;
     applyViewMode();
+  });
+  autoCenterCheckbox.addEventListener("change", () => {
+    viewerState.autoCenterEnabled = autoCenterCheckbox.checked;
+    viewerState.lastAutoCenteredFocusKey = null;
+    if (viewerState.autoCenterEnabled) {
+      applyViewMode();
+    }
+  });
+}
+
+
+/**
+ * Attach the debugger play and step buttons to their runtime endpoints.
+ */
+function wireDebuggerControls() {
+  document.getElementById("debugger-play-button").addEventListener("click", async () => {
+    await submitRuntimeAction("/api/runtime/play", {});
+  });
+  document.getElementById("debugger-pause-button").addEventListener("click", async () => {
+    await submitRuntimeAction("/api/runtime/pause", {});
+  });
+  document.getElementById("debugger-step-button").addEventListener("click", async () => {
+    await submitRuntimeAction("/api/runtime/step", {});
   });
 }
 
@@ -268,19 +304,102 @@ async function refreshSession() {
 function renderSession(session) {
   renderState(session.state);
   renderExecutionLog(session.execution_log || []);
+  renderEventHistory(session.debugger?.event_history || []);
   viewerState.sessionEvents = session.events || [];
   viewerState.sessionEnums = session.enums || [];
   viewerState.sessionVariables = session.variables || [];
+  viewerState.isPaused = Boolean(session.debugger?.is_paused);
+  viewerState.hasPendingExecution = Boolean(session.debugger?.has_pending_execution);
   renderEventOptions(viewerState.sessionEvents);
   renderEventParameterList();
   renderVariableList(viewerState.sessionVariables, session.variable_values, viewerState.sessionEnums);
-  viewerState.focusRelatedIds = session.focus?.related_ids || [];
+  renderDebugger(session.debugger || {});
+  viewerState.focusStateRelatedIds = session.focus?.state_related_ids || [];
+  viewerState.focusTraceRelatedIds = session.focus?.trace_related_ids || [];
+  viewerState.viewportStateFocusIds = session.focus?.state_viewport_focus_ids || [];
+  viewerState.viewportTraceFocusIds = session.focus?.trace_viewport_focus_ids || [];
   clearHighlights();
   clearFocusMode();
   applyHighlightClass(session.highlight.state_ids || [], ACTIVE_STATE_CLASS);
   applyHighlightClass(session.highlight.transition_ids || [], ACTIVE_TRANSITION_CLASS);
   applyHighlightClass(session.highlight.text_ids || [], ACTIVE_TEXT_CLASS);
+  applyHighlightClass(session.highlight.current_transition_ids || [], CURRENT_STEP_CLASS);
+  applyHighlightClass(session.highlight.current_text_ids || [], CURRENT_STEP_TEXT_CLASS);
   applyViewMode();
+  applyAutoCenter();
+}
+
+
+/**
+ * Render the runtime debugger panel and action enablement.
+ */
+function renderDebugger(debuggerState) {
+  const currentEvent = document.getElementById("debugger-current-event");
+  const status = document.getElementById("debugger-status");
+  const queue = document.getElementById("debugger-queue");
+  const playButton = document.getElementById("debugger-play-button");
+  const pauseButton = document.getElementById("debugger-pause-button");
+  const stepButton = document.getElementById("debugger-step-button");
+  const activeEvent = debuggerState.current_event;
+  const queuedEvents = debuggerState.queued_events || [];
+  const hasPendingExecution = Boolean(debuggerState.has_pending_execution);
+  const canStep = Boolean(debuggerState.can_step);
+  const isPaused = Boolean(debuggerState.is_paused);
+
+  playButton.disabled = !isPaused && !hasPendingExecution && queuedEvents.length === 0;
+  pauseButton.disabled = isPaused;
+  stepButton.disabled = !canStep;
+
+  currentEvent.innerHTML = activeEvent === null
+    ? '<div class="debugger-queue-item">Current event: idle</div>'
+    : `
+      <div class="debugger-queue-item">Current event: <strong>${escapeHtml(activeEvent.event_id || "<init>")}</strong></div>
+      ${renderEventParametersSummary(activeEvent.parameters || {})}
+    `;
+
+  if (!isPaused) {
+    status.textContent = "Running";
+  } else if (hasPendingExecution) {
+    status.textContent = "Paused during current event";
+  } else if (queuedEvents.length > 0) {
+    status.textContent = "Paused between events";
+  } else {
+    status.textContent = "Paused and idle";
+  }
+
+  if (queuedEvents.length === 0) {
+    queue.innerHTML = '<div class="debugger-queue-item">Queued events: 0</div>';
+    return;
+  }
+
+  queue.innerHTML = [
+    `<div class="debugger-queue-item">Queued events: ${queuedEvents.length}</div>`,
+    ...queuedEvents.map((event) => (
+      `
+        <div class="debugger-queue-item">${escapeHtml(event.event_id || "<init>")}</div>
+        ${renderEventParametersSummary(event.parameters || {})}
+      `
+    )),
+  ].join("");
+}
+
+
+/**
+ * Render the historical list of executed runtime events.
+ */
+function renderEventHistory(eventHistory) {
+  const container = document.getElementById("event-history-box");
+  if (eventHistory.length === 0) {
+    container.innerHTML = '<p class="trace-entry">No executed events.</p>';
+    return;
+  }
+
+  container.innerHTML = eventHistory.map((event, index) => `
+    <div class="debugger-queue-item">
+      ${escapeHtml(String(index + 1))}. <strong>${escapeHtml(event.event_id || "<init>")}</strong>
+      ${renderEventParametersSummary(event.parameters || {})}
+    </div>
+  `).join("");
 }
 
 
@@ -654,6 +773,8 @@ function clearHighlights() {
   clearHighlightClass(ACTIVE_STATE_CLASS);
   clearHighlightClass(ACTIVE_TRANSITION_CLASS);
   clearHighlightClass(ACTIVE_TEXT_CLASS);
+  clearHighlightClass(CURRENT_STEP_CLASS);
+  clearHighlightClass(CURRENT_STEP_TEXT_CLASS);
 }
 
 
@@ -662,10 +783,149 @@ function clearHighlights() {
  */
 function applyViewMode() {
   clearFocusMode();
-  if (viewerState.viewMode !== "focus") {
+  if (viewerState.viewMode === "normal") {
     return;
   }
-  applyFocusMode(viewerState.focusRelatedIds);
+
+  const focusModel = getFocusModel();
+  applyFocusMode(focusModel.relatedIds);
+}
+
+
+/**
+ * Return the semantic focus ids for the currently selected view mode.
+ */
+function getFocusModel() {
+  if (viewerState.viewMode === "trace") {
+    return {
+      relatedIds: viewerState.focusTraceRelatedIds,
+      viewportFocusIds: viewerState.viewportTraceFocusIds,
+    };
+  }
+
+  if (viewerState.hasPendingExecution) {
+    return {
+      relatedIds: viewerState.focusTraceRelatedIds,
+      viewportFocusIds: viewerState.viewportTraceFocusIds,
+    };
+  }
+
+  return {
+    relatedIds: Array.from(new Set([
+      ...viewerState.focusTraceRelatedIds,
+      ...viewerState.focusStateRelatedIds,
+    ])),
+    viewportFocusIds: viewerState.viewportStateFocusIds,
+  };
+}
+
+
+/**
+ * Apply viewport auto-centering independently from the current view mode.
+ */
+function applyAutoCenter() {
+  centerViewportOnFocusTarget(getAutoCenterFocusIds());
+}
+
+
+/**
+ * Return the active semantic target used by viewport auto-centering.
+ */
+function getAutoCenterFocusIds() {
+  if (viewerState.hasPendingExecution) {
+    return viewerState.viewportTraceFocusIds;
+  }
+
+  if (viewerState.viewMode === "state") {
+    return viewerState.viewportStateFocusIds;
+  }
+
+  return viewerState.viewportTraceFocusIds;
+}
+
+
+/**
+ * Center the viewport on the current semantic focus target without changing zoom.
+ */
+function centerViewportOnFocusTarget(focusIds) {
+  if (!viewerState.autoCenterEnabled) {
+    return;
+  }
+  const focusKey = focusIds.join("|");
+  if (focusIds.length === 0 || viewerState.lastAutoCenteredFocusKey === focusKey) {
+    return;
+  }
+
+  const focusBounds = measureFocusBounds(focusIds);
+  if (focusBounds === null) {
+    return;
+  }
+
+  const viewport = document.getElementById("svg-viewport");
+  const viewportRect = viewport.getBoundingClientRect();
+  viewport.scrollLeft = Math.max(
+    0,
+    viewport.scrollLeft + (focusBounds.centerX - viewportRect.left) - (viewportRect.width / 2),
+  );
+  viewport.scrollTop = Math.max(
+    0,
+    viewport.scrollTop + (focusBounds.centerY - viewportRect.top) - (viewportRect.height / 2),
+  );
+  viewerState.lastAutoCenteredFocusKey = focusKey;
+}
+
+
+/**
+ * Measure one combined rendered bounding box for the requested semantic ids.
+ */
+function measureFocusBounds(ids) {
+  let left = null;
+  let top = null;
+  let right = null;
+  let bottom = null;
+
+  for (const id of ids) {
+    const element = document.getElementById(id);
+    const box = measureSvgElementBox(element);
+    if (box === null) {
+      continue;
+    }
+    left = left === null ? box.x : Math.min(left, box.x);
+    top = top === null ? box.y : Math.min(top, box.y);
+    right = right === null ? box.x + box.width : Math.max(right, box.x + box.width);
+    bottom = bottom === null ? box.y + box.height : Math.max(bottom, box.y + box.height);
+  }
+
+  if (left === null || top === null || right === null || bottom === null) {
+    return null;
+  }
+
+  return {
+    centerX: (left + right) / 2,
+    centerY: (top + bottom) / 2,
+  };
+}
+
+
+/**
+ * Measure one rendered element box in viewport pixel coordinates.
+ */
+function measureSvgElementBox(element) {
+  if (element === null || typeof element.getBoundingClientRect !== "function") {
+    return null;
+  }
+
+  try {
+    const box = element.getBoundingClientRect();
+    return {
+      x: Number(box.left),
+      y: Number(box.top),
+      width: Number(box.width),
+      height: Number(box.height),
+    };
+  } catch {
+    return null;
+  }
 }
 
 
@@ -736,6 +996,18 @@ async function fetchText(url) {
     throw new Error(await response.text());
   }
   return response.text();
+}
+
+
+/**
+ * Return compact HTML for one event parameter dictionary.
+ */
+function renderEventParametersSummary(parameters) {
+  const parameterNames = Object.keys(parameters);
+  if (parameterNames.length === 0) {
+    return "";
+  }
+  return `<div class="debugger-queue-item">${escapeHtml(JSON.stringify(parameters))}</div>`;
 }
 
 

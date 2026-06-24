@@ -31,7 +31,6 @@ Each state defines a subset of these elements:
 - `id`, `label`: state identity and human-readable label.
 - `states`: child states for hierarchical decomposition.
 - `hooks.on_entry`: activities executed when the state is entered.
-- `hooks.on_initial`: activities executed before following that state's local initial transition.
 - `hooks.on_exit`: activities executed when the state is exited.
 - `initial_transition`: required only when the state has its own local default child path.
 - `internal_transitions`: event handlers that consume an event without changing active state.
@@ -40,6 +39,7 @@ Each state defines a subset of these elements:
 ## Transition elements
 
 - `initial_transition.target_id`: target state entered automatically.
+- `initial_transition.activities`: activities executed on that initial transition before entering its target path.
 - `internal_transition.event_id`: event consumed in place.
 - `internal_transition.activities`: activities executed for that internal transition.
 - `external_transition.event_id`: triggering event.

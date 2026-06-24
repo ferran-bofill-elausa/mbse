@@ -73,6 +73,23 @@ class HsmRender:
 
     return self._requireHighlightIndex().initial_transition_source_ids_by_owner_id[state_id]
 
+  def getInitialTransitionLabelTextIds(self, edge_id: str) -> tuple[str, ...]:
+    """Return text fragment ids for one initial-transition label."""
+
+    return self._requireHighlightIndex().initial_transition_label_text_ids.get(edge_id, ())
+
+  def getInitialTransitionActivityTextIds(
+    self,
+    edge_id: str,
+    activity: dict[str, str] | str,
+  ) -> tuple[str, ...]:
+    """Return text fragment ids for one initial-transition activity label."""
+
+    return self._requireHighlightIndex().initial_transition_activity_text_ids.get(
+      (edge_id, helpers.callableKey(activity)),
+      (),
+    )
+
   def getExternalTransitionIds(
     self,
     source_state_id: str,
@@ -107,6 +124,18 @@ class HsmRender:
       (source_state_id, event_id)
     ]
 
+  def getGuardNodeTextIds(
+    self,
+    source_state_id: str,
+    event_id: str,
+  ) -> tuple[str, ...]:
+    """Return text fragment ids for one rendered guard node label."""
+
+    return self._requireHighlightIndex().guard_node_text_ids_by_key.get(
+      (source_state_id, event_id),
+      (),
+    )
+
   def getGuardBranchIds(
     self,
     source_state_id: str,
@@ -132,27 +161,27 @@ class HsmRender:
       (state_id, event_id)
     ]
 
-  def getLifecycleSectionTextIds(
+  def getStateHookSectionTextIds(
     self,
     state_id: str,
     section_name: str,
   ) -> tuple[str, ...]:
-    """Return text fragment ids for one lifecycle section title."""
+    """Return text fragment ids for one state-hook section title."""
 
-    return self._requireHighlightIndex().lifecycle_section_text_ids.get(
+    return self._requireHighlightIndex().state_hook_section_text_ids.get(
       (state_id, section_name),
       (),
     )
 
-  def getLifecycleActivityTextIds(
+  def getStateHookActivityTextIds(
     self,
     state_id: str,
     section_name: str,
     activity: dict[str, str] | str,
   ) -> tuple[str, ...]:
-    """Return text fragment ids for one lifecycle activity label."""
+    """Return text fragment ids for one state-hook activity label."""
 
-    return self._requireHighlightIndex().lifecycle_activity_text_ids.get(
+    return self._requireHighlightIndex().state_hook_activity_text_ids.get(
       (state_id, section_name, helpers.callableKey(activity)),
       (),
     )
@@ -258,6 +287,7 @@ class HsmRender:
         source_cluster_svg_id=None,
         target_state_id=root_initial_target_id,
         svg_id=root_initial_id,
+        label_line=None,
         state_ids_by_state_id=state_ids_by_state_id,
         compound_state_ids=compound_state_ids,
         routing_helpers=routing_helpers,
@@ -283,6 +313,10 @@ class HsmRender:
             source_cluster_svg_id=state_ids_by_state_id[state_id],
             target_state_id=target_state_id,
             svg_id=initial_id,
+            label_line=helpers.formatInitialTransitionLabel(
+              initial_id,
+              model.getStateInitialTransitionActivities(state_id),
+            ),
             state_ids_by_state_id=state_ids_by_state_id,
             compound_state_ids=compound_state_ids,
             routing_helpers=routing_helpers,
@@ -330,7 +364,14 @@ class HsmRender:
         guard_nodes.append(
           types.RenderGuardNode(
             svg_id=guard_node_id,
-            title_text=helpers.callableLabel(guard_condition["guard_activity"]),
+            title_line=types.RenderTextLine(
+              fragments=(
+                types.RenderTextFragment(
+                  text=helpers.callableLabel(guard_condition["guard_activity"]),
+                  target_payload=f"guard_node_text|{state_id}|{event_id}",
+                ),
+              )
+            ),
           )
         )
         transition_edges.append(
@@ -520,13 +561,16 @@ class HsmRender:
       state_ids_by_state_id=prepared.state_ids_by_state_id,
       initial_transition_ids_by_owner_id=prepared.initial_transition_ids_by_owner_id,
       initial_transition_source_ids_by_owner_id=prepared.initial_transition_source_ids_by_owner_id,
+      initial_transition_label_text_ids=text_targets.initial_transition_label_ids,
+      initial_transition_activity_text_ids=text_targets.initial_transition_activity_ids,
       external_transition_ids_by_key=prepared.external_transition_ids_by_key,
       guarded_transition_ids_by_key=prepared.guarded_transition_ids_by_key,
       guard_node_ids_by_key=prepared.guard_node_ids_by_key,
       guard_branch_ids_by_key=prepared.guard_branch_ids_by_key,
+      guard_node_text_ids_by_key=text_targets.guard_node_text_ids,
       internal_transition_ids_by_key=prepared.internal_transition_ids_by_key,
-      lifecycle_section_text_ids=text_targets.lifecycle_section_ids,
-      lifecycle_activity_text_ids=text_targets.lifecycle_activity_ids,
+      state_hook_section_text_ids=text_targets.state_hook_section_ids,
+      state_hook_activity_text_ids=text_targets.state_hook_activity_ids,
       external_transition_label_text_ids=text_targets.external_transition_label_ids,
       external_transition_activity_text_ids=text_targets.external_transition_activity_ids,
       internal_transition_section_text_ids=internal_transition_section_text_ids,

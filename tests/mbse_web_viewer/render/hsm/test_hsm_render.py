@@ -43,16 +43,17 @@ def test_hsm_svg_renders_reference_model_with_expected_highlight_ids() -> None:
   assert "id=\"external_transition_s1_transition_to_s211\"" in rendered.getSvgText()
 
 
-def test_hsm_svg_exposes_lifecycle_and_transition_text_targets() -> None:
+def test_hsm_svg_exposes_state_hook_and_transition_text_targets() -> None:
   model = HsmModel.loadAndValidate(FIXTURE_PATH)
 
   rendered = HsmRender()
   rendered.render(model)
 
-  assert rendered.getLifecycleSectionTextIds("s4", "on_initial")
-  assert rendered.getLifecycleActivityTextIds(
-    "s4",
-    "on_initial",
+  assert rendered.getInitialTransitionLabelTextIds(
+    rendered.getInitialTransitionId("s4")
+  )
+  assert rendered.getInitialTransitionActivityTextIds(
+    rendered.getInitialTransitionId("s4"),
     {"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s4_initial"},
   )
   assert rendered.getExternalTransitionLabelTextIds(

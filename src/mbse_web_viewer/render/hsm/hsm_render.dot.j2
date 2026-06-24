@@ -71,10 +71,10 @@ digraph "{{ view.document_id }}" {
 {%- endmacro %}
 {{ render_states(none) }}
 {% for guard in view.guard_nodes %}
-  "{{ guard.svg_id }}" [id="{{ guard.svg_id }}", shape=diamond, label="", xlabel="{{ guard.title_text|e }}"];
+  "{{ guard.svg_id }}" [id="{{ guard.svg_id }}", shape=diamond, label="", xlabel={{ render_edge_label(guard.title_line) }}];
 {% endfor %}
 {% for edge in view.initial_edges %}
-  "{{ edge.source_id }}" -> "{{ edge.target_id }}" [id="{{ edge.svg_id }}", label=""{% if edge.source_cluster_svg_id %}, ltail="cluster_{{ edge.source_cluster_svg_id }}"{% endif %}{% if edge.target_cluster_svg_id %}, lhead="cluster_{{ edge.target_cluster_svg_id }}"{% endif %}];
+  "{{ edge.source_id }}" -> "{{ edge.target_id }}" [id="{{ edge.svg_id }}", {% if edge.label_line %}label={{ render_edge_label(edge.label_line) }}{% else %}label=""{% endif %}{% if edge.source_cluster_svg_id %}, ltail="cluster_{{ edge.source_cluster_svg_id }}"{% endif %}{% if edge.target_cluster_svg_id %}, lhead="cluster_{{ edge.target_cluster_svg_id }}"{% endif %}];
 {% endfor %}
 {% for edge in view.transition_edges %}
   "{{ edge.source_id }}" -> "{{ edge.target_id }}" [id="{{ edge.svg_id }}", {% if edge.label_line %}label={{ render_edge_label(edge.label_line) }}{% else %}label=""{% endif %}{% if edge.source_cluster_svg_id %}, ltail="cluster_{{ edge.source_cluster_svg_id }}"{% endif %}{% if edge.target_cluster_svg_id %}, lhead="cluster_{{ edge.target_cluster_svg_id }}"{% endif %}];

@@ -70,7 +70,6 @@
       "label": "S1",
       "hooks": {
         "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1_entry"}],
-        "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1_initial"}],
         "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1_exit"}]
       },
       "internal_transitions": [
@@ -82,7 +81,8 @@
         }
       ],
       "initial_transition": {
-        "target_id": "s11"
+        "target_id": "s11",
+        "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1_initial"}]
       },
       "external_transitions": [
         {
@@ -97,11 +97,11 @@
           "label": "S11",
           "hooks": {
             "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s11_entry"}],
-            "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s11_initial"}],
             "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s11_exit"}]
           },
           "initial_transition": {
-            "target_id": "s111"
+            "target_id": "s111",
+            "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s11_initial"}]
           },
           "states": [
             {
@@ -109,11 +109,11 @@
               "label": "S111",
               "hooks": {
                 "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s111_entry"}],
-                "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s111_initial"}],
                 "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s111_exit"}]
               },
               "initial_transition": {
-                "target_id": "s1111"
+                "target_id": "s1111",
+                "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s111_initial"}]
               },
               "states": [
                 {
@@ -121,11 +121,11 @@
                   "label": "S1111",
                   "hooks": {
                     "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1111_entry"}],
-                    "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1111_initial"}],
                     "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1111_exit"}]
                   },
                   "initial_transition": {
-                    "target_id": "s11111"
+                    "target_id": "s11111",
+                    "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s1111_initial"}]
                   },
                   "states": [
                     {
@@ -187,7 +187,6 @@
               "label": "S211",
               "hooks": {
                 "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s211_entry"}],
-                "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s211_initial"}],
                 "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s211_exit"}]
               },
               "internal_transitions": [
@@ -200,7 +199,8 @@
                 }
               ],
               "initial_transition": {
-                "target_id": "s2111"
+                "target_id": "s2111",
+                "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s211_initial"}]
               },
               "states": [
                 {
@@ -300,11 +300,11 @@
       "label": "S4",
       "hooks": {
         "on_entry": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s4_entry"}],
-        "on_initial": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s4_initial"}],
         "on_exit": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s4_exit"}]
       },
       "initial_transition": {
-        "target_id": "s41"
+        "target_id": "s41",
+        "activities": [{"module": "tests.reference_model.hsm.reference_hsm_callables", "name": "s4_initial"}]
       },
       "states": [
         {

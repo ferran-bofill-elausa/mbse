@@ -9,49 +9,76 @@
   <body class="workbench-page" id="workbench-page">
     <main class="layout" id="layout">
       <aside class="panel sidebar">
-        <section class="sidebar-section" aria-labelledby="state-heading">
-          <h2 id="state-heading">State</h2>
-          <div class="state-box" id="state-box"></div>
-        </section>
-
-        <section class="sidebar-section" aria-labelledby="reset-heading">
-          <h2 id="reset-heading">Reset</h2>
-          <div class="reset-row">
-            <form id="reset-form">
-              <button type="submit">Reset runtime</button>
-            </form>
-            <button id="reset-view-button" type="button">Reset view</button>
-          </div>
-        </section>
-
-        <section class="sidebar-section" aria-labelledby="view-heading">
-          <h2 id="view-heading">View</h2>
-          <form id="view-mode-form">
-            <label for="view-mode-select">Mode</label>
-            <select id="view-mode-select" name="view_mode">
-              <option value="normal">Normal</option>
-              <option value="focus">Focus current state</option>
-            </select>
-          </form>
-        </section>
-
-        <section class="sidebar-section" aria-labelledby="events-heading">
-          <h2 id="events-heading">Events</h2>
-          <form id="event-form">
-            <label for="event-select">Event</label>
-            <select id="event-select" name="event_id"></select>
-            <div id="event-parameter-list"></div>
-            <button type="submit">Send event</button>
-          </form>
-        </section>
-
-        <section class="sidebar-section" aria-labelledby="variables-heading">
-          <h2 id="variables-heading">Variables</h2>
-          <div id="variable-list"></div>
+        <section class="sidebar-section">
+          <details class="sidebar-details" open>
+            <summary>Reset</summary>
+            <div class="reset-row">
+              <form id="reset-form">
+                <button type="submit">Reset runtime</button>
+              </form>
+              <button id="reset-view-button" type="button">Reset view</button>
+            </div>
+          </details>
         </section>
 
         <section class="sidebar-section">
-          <details class="trace-panel" id="trace-panel">
+          <details class="sidebar-details" open>
+            <summary>View</summary>
+            <form id="view-mode-form">
+              <label for="view-mode-select">Mode</label>
+              <select id="view-mode-select" name="view_mode">
+                <option value="normal">Normal</option>
+                <option value="state">Focus current state</option>
+                <option value="trace">Focus last trace</option>
+              </select>
+              <label class="view-toggle-row" for="auto-center-checkbox">
+                <input id="auto-center-checkbox" name="auto_center" type="checkbox" checked />
+                <span>Auto-center active element</span>
+              </label>
+            </form>
+          </details>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="sidebar-details" open>
+            <summary>Events</summary>
+            <form id="event-form">
+              <label for="event-select">Event</label>
+              <select id="event-select" name="event_id"></select>
+              <div id="event-parameter-list"></div>
+              <button type="submit">Send event</button>
+            </form>
+          </details>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="sidebar-details" open>
+            <summary>Variables</summary>
+            <div id="variable-list"></div>
+          </details>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="sidebar-details" open>
+            <summary>Debug Info</summary>
+            <div class="debugger-sidebar-box">
+              <div class="state-box" id="state-box"></div>
+              <div class="debugger-status" id="debugger-status"></div>
+              <div class="debugger-current-event" id="debugger-current-event"></div>
+              <div class="debugger-queue" id="debugger-queue"></div>
+            </div>
+          </details>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="sidebar-details">
+            <summary>Executed Events</summary>
+            <div class="trace-box" id="event-history-box"></div>
+          </details>
+        </section>
+
+        <section class="sidebar-section">
+          <details class="sidebar-details">
             <summary>Execution Log</summary>
             <div class="trace-box" id="trace-box"></div>
           </details>
@@ -61,6 +88,11 @@
       <div id="layout-splitter" class="layout-splitter" aria-hidden="true"></div>
 
       <section class="panel diagram-panel">
+        <section class="debug-toolbar" aria-label="Debugger controls">
+          <button id="debugger-play-button" type="button" title="Play" aria-label="Play">&gt;</button>
+          <button id="debugger-pause-button" type="button" title="Pause" aria-label="Pause">||</button>
+          <button id="debugger-step-button" type="button" title="Step" aria-label="Step">-&gt;</button>
+        </section>
         <div id="svg-viewport">
           <div id="svg-stage">
             <div id="svg-root"></div>

@@ -51,7 +51,6 @@ class HsmRelatedState:
 
   state_id: str
   on_entry_activities: tuple[dict[str, str], ...]
-  on_initial_activities: tuple[dict[str, str], ...]
   on_exit_activities: tuple[dict[str, str], ...]
   internal_transitions: tuple[dict[str, Any], ...]
 
@@ -256,25 +255,15 @@ class HsmModel:
 
     return self.getStateById(state_id).get("states", [])
 
-  def getStateHooks(self, state_id: str) -> dict[str, list[dict[str, str]]]:
-    """Return the authored hooks dictionary for one state."""
-
-    return self.getStateById(state_id).get("hooks", {})
-
   def getStateOnEntry(self, state_id: str) -> list[dict[str, str]]:
     """Return the authored on_entry hooks for one state."""
 
-    return self.getStateHooks(state_id).get("on_entry", [])
-
-  def getStateOnInitial(self, state_id: str) -> list[dict[str, str]]:
-    """Return the authored on_initial hooks for one state."""
-
-    return self.getStateHooks(state_id).get("on_initial", [])
+    return self.getStateById(state_id).get("hooks", {}).get("on_entry", [])
 
   def getStateOnExit(self, state_id: str) -> list[dict[str, str]]:
     """Return the authored on_exit hooks for one state."""
 
-    return self.getStateHooks(state_id).get("on_exit", [])
+    return self.getStateById(state_id).get("hooks", {}).get("on_exit", [])
 
   def hasStateInitialTransition(self, state_id: str) -> bool:
     """Return whether one state declares a local initial transition."""
@@ -291,6 +280,11 @@ class HsmModel:
 
     return self.getStateInitialTransition(state_id)["target_id"]
 
+  def getStateInitialTransitionActivities(self, state_id: str) -> list[dict[str, str]]:
+    """Return the authored activities for one local initial transition."""
+
+    return self.getStateInitialTransition(state_id).get("activities", [])
+
   def getRootInitialTransition(self) -> dict[str, Any]:
     """Return the authored root initial transition."""
 
@@ -300,6 +294,11 @@ class HsmModel:
     """Return the authored root initial target id."""
 
     return self.getRootInitialTransition()["target_id"]
+
+  def getRootInitialTransitionActivities(self) -> list[dict[str, str]]:
+    """Return the authored activities for the root initial transition."""
+
+    return self.getRootInitialTransition().get("activities", [])
 
   def getStateInternalTransitions(self, state_id: str) -> list[dict[str, Any]]:
     """Return the authored internal transitions for one state."""
@@ -474,7 +473,6 @@ class HsmModel:
         HsmRelatedState(
           state_id=related_state_id,
           on_entry_activities=tuple(self.getStateOnEntry(related_state_id)),
-          on_initial_activities=tuple(self.getStateOnInitial(related_state_id)),
           on_exit_activities=tuple(self.getStateOnExit(related_state_id)),
           internal_transitions=tuple(self.getStateInternalTransitions(related_state_id)),
         )

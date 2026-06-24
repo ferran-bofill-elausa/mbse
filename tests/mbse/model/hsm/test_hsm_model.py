@@ -51,6 +51,12 @@ def test_hsm_model_exposes_expected_structure_queries() -> None:
   assert model.getParentStateId("s1") is None
   assert model.hasStateInitialTransition("s4") is True
   assert model.getStateInitialTargetId("s4") == "s41"
+  assert model.getStateInitialTransitionActivities("s4") == [
+    {
+      "module": "tests.reference_model.hsm.reference_hsm_callables",
+      "name": "s4_initial",
+    }
+  ]
   assert model.getStateLabel("s311") == "S311"
 
 
@@ -103,6 +109,7 @@ def test_hsm_model_exposes_event_parameters() -> None:
   model = HsmModel.loadAndValidate(FIXTURE_PATH)
 
   assert model.getEventParameters("transition") == []
+  assert model.getRootInitialTransitionActivities() == []
   assert model.getEventParameters("ping") == [
     {
       "name": "value",
@@ -220,6 +227,21 @@ def test_hsm_model_rejects_invalid_typed_variable_and_parameter_shapes(tmp_path:
 
   with pytest.raises(ValidationError):
     HsmModel.loadAndValidate(invalid_parameter_path)
+
+
+def test_hsm_model_rejects_legacy_on_initial_hook_shape(tmp_path: Path) -> None:
+  invalid_model = _load_fixture()
+  invalid_model["states"][0]["hooks"]["on_initial"] = [
+    {
+      "module": "tests.reference_model.hsm.reference_hsm_callables",
+      "name": "legacy_initial",
+    }
+  ]
+
+  invalid_path = _write_model(tmp_path, invalid_model)
+
+  with pytest.raises(ValidationError):
+    HsmModel.loadAndValidate(invalid_path)
 
 
 def test_hsm_model_exposes_internal_transition_declarations() -> None:
