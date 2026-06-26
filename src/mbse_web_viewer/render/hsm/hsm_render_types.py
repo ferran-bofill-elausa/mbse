@@ -11,6 +11,7 @@ class HsmSvgHighlightIndex:
   """Stable lookup index from HSM structure to highlightable SVG ids."""
 
   state_ids_by_state_id: dict[str, str]
+  state_label_text_ids: dict[str, tuple[str, ...]]
   initial_transition_ids_by_owner_id: dict[str | None, str]
   initial_transition_source_ids_by_owner_id: dict[str | None, str]
   initial_transition_label_text_ids: dict[str, tuple[str, ...]]
@@ -59,6 +60,7 @@ class RenderStateNode:
   """Prepared node data consumed directly by the DOT template."""
 
   svg_id: str
+  state_id: str
   title_text: str
   body_sections: tuple[RenderStateSection, ...]
   parent_svg_id: str | None
@@ -155,6 +157,7 @@ class NormalizedSvgTextTargets:
 
   state_hook_section_ids: dict[tuple[str, str], tuple[str, ...]]
   state_hook_activity_ids: dict[tuple[str, str, str], tuple[str, ...]]
+  state_label_ids: dict[str, tuple[str, ...]]
   initial_transition_label_ids: dict[str, tuple[str, ...]]
   initial_transition_activity_ids: dict[tuple[str, str], tuple[str, ...]]
   external_transition_label_ids: dict[str, tuple[str, ...]]

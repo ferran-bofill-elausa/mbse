@@ -3,6 +3,7 @@ from __future__ import annotations
 """Serve one HSM runtime session together with its rendered SVG viewer."""
 
 import argparse
+from copy import deepcopy
 from dataclasses import asdict
 from dataclasses import dataclass
 from functools import partial
@@ -10,9 +11,11 @@ from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 import json
 from json import JSONDecodeError
+import mimetypes
 from pathlib import Path
 from threading import Thread
 from typing import Any
+from urllib.parse import urlparse
 import webbrowser
 
 from mbse.model.hsm.hsm_model import HsmExternalTransitionRelation
@@ -55,6 +58,18 @@ class HsmViewerTrace:
 
 
 @dataclass(frozen=True)
+class HsmViewerBreakpointTarget:
+  """One semantic debugger breakpoint target resolved to SVG ids."""
+
+  id: str
+  label: str
+  svg_ids: tuple[str, ...]
+  text_ids: tuple[str, ...]
+  is_set: bool
+  enabled: bool
+
+
+@dataclass(frozen=True)
 class HsmViewerFocus:
   """Resolved focus contexts for state-centric and trace-centric viewer modes."""
 
@@ -75,11 +90,13 @@ class HsmViewerSession:
   variables: tuple[dict[str, object], ...]
   state: dict[str, str | None]
   variable_values: dict[str, Any]
+  changed_variable_ids: tuple[str, ...]
   execution_log: list[dict[str, object]]
   debugger: dict[str, object]
   highlight: HsmViewerHighlight
   focus: HsmViewerFocus
   last_trace: HsmViewerTrace
+  breakpoints: tuple[HsmViewerBreakpointTarget, ...]
 
 
 class RunningHsmViewerServer:
@@ -114,7 +131,12 @@ class HsmViewerServerController:
     self._model = model
     self._rendered_svg = HsmRender()
     self._rendered_svg.render(model)
+    self._breakpoint_enabled_by_id: dict[str, bool] = {}
+    self._breakpoint_targets = self._buildBreakpointTargets()
+    self._breakpoint_target_ids = tuple(self._breakpoint_targets)
+    self._breakpoint_order: list[str] = []
     self._runtime = self._buildRuntime()
+    self._changed_variable_ids: tuple[str, ...] = ()
     self._advanceToNextExecutableStepForViewer()
     self._last_highlight = self._buildCurrentTraceHighlight()
 
@@ -137,17 +159,20 @@ class HsmViewerServerController:
         variable["name"]: self._runtime.getVariable(variable["name"])
         for variable in self._model.getVariables()
       },
+      changed_variable_ids=self._changed_variable_ids,
       execution_log=self._serializeExecutionLog(),
       debugger=self._serializeDebuggerState(),
       highlight=self._last_highlight,
       focus=self._buildCurrentStateFocus(),
       last_trace=self._serializeLastTrace(),
+      breakpoints=self._serializeBreakpoints(),
     )
 
   def reset(self) -> HsmViewerSession:
     """Reset the runtime and return the refreshed browser session."""
 
     self._runtime = self._buildRuntime()
+    self._changed_variable_ids = ()
     self._advanceToNextExecutableStepForViewer()
     self._last_highlight = self._buildCurrentTraceHighlight()
     return self.getSession()
@@ -160,15 +185,30 @@ class HsmViewerServerController:
     """Send one runtime event and return the refreshed browser session."""
 
     self._requireDeclaredEventId(event_id)
+    initial_variable_values = self._snapshotVariableValues()
+    should_run_to_breakpoint = (
+      self._hasEnabledBreakpoints() and not self._runtime.isPaused()
+    )
+    if should_run_to_breakpoint:
+      self._runtime.pause()
     self._runtime.sendEvent(event_id, parameters)
-    self._advanceToNextExecutableStepForViewer()
+    if should_run_to_breakpoint:
+      self._playUntilBreakpoint()
+    else:
+      self._advanceToNextExecutableStepForViewer()
+    self._changed_variable_ids = self._diffVariableIds(initial_variable_values)
     self._last_highlight = self._buildCurrentTraceHighlight()
     return self.getSession()
 
   def play(self) -> HsmViewerSession:
     """Run the runtime until the current pending work and queue are drained."""
 
-    self._runtime.play()
+    initial_variable_values = self._snapshotVariableValues()
+    if self._hasEnabledBreakpoints():
+      self._playUntilBreakpoint()
+    else:
+      self._runtime.play()
+    self._changed_variable_ids = self._diffVariableIds(initial_variable_values)
     self._last_highlight = self._buildCurrentTraceHighlight()
     return self.getSession()
 
@@ -182,8 +222,10 @@ class HsmViewerServerController:
   def stepExecution(self) -> HsmViewerSession:
     """Advance the runtime to the next debugger step."""
 
+    initial_variable_values = self._snapshotVariableValues()
     self._runtime.step()
     self._advanceToNextExecutableStepForViewer()
+    self._changed_variable_ids = self._diffVariableIds(initial_variable_values)
     self._last_highlight = self._buildCurrentTraceHighlight()
     return self.getSession()
 
@@ -191,7 +233,81 @@ class HsmViewerServerController:
     """Set one runtime variable and return the refreshed browser session."""
 
     self._requireDeclaredVariableId(variable_id)
+    initial_variable_values = self._snapshotVariableValues()
     self._runtime.setVariable(variable_id, value)
+    self._changed_variable_ids = self._diffVariableIds(initial_variable_values)
+    self._last_highlight = self._buildCurrentTraceHighlight()
+    return self.getSession()
+
+  def toggleBreakpoint(self, breakpoint_id: str) -> HsmViewerSession:
+    """Toggle one declared debugger breakpoint target."""
+
+    if breakpoint_id not in self._breakpoint_targets:
+      raise KeyError(f"Unknown breakpoint_id '{breakpoint_id}'.")
+    if breakpoint_id in self._breakpoint_enabled_by_id:
+      del self._breakpoint_enabled_by_id[breakpoint_id]
+      self._breakpoint_order = [
+        ordered_breakpoint_id
+        for ordered_breakpoint_id in self._breakpoint_order
+        if ordered_breakpoint_id != breakpoint_id
+      ]
+    else:
+      self._breakpoint_enabled_by_id[breakpoint_id] = True
+      self._breakpoint_order.append(breakpoint_id)
+    self._last_highlight = self._buildCurrentTraceHighlight()
+    return self.getSession()
+
+  def removeBreakpoint(self, breakpoint_id: str) -> HsmViewerSession:
+    """Remove one set debugger breakpoint."""
+
+    if breakpoint_id not in self._breakpoint_targets:
+      raise KeyError(f"Unknown breakpoint_id '{breakpoint_id}'.")
+    self._breakpoint_enabled_by_id.pop(breakpoint_id, None)
+    self._breakpoint_order = [
+      ordered_breakpoint_id
+      for ordered_breakpoint_id in self._breakpoint_order
+      if ordered_breakpoint_id != breakpoint_id
+    ]
+    self._last_highlight = self._buildCurrentTraceHighlight()
+    return self.getSession()
+
+  def setBreakpointEnabled(
+    self,
+    breakpoint_id: str,
+    enabled: bool,
+  ) -> HsmViewerSession:
+    """Enable or disable one existing debugger breakpoint."""
+
+    if breakpoint_id not in self._breakpoint_targets:
+      raise KeyError(f"Unknown breakpoint_id '{breakpoint_id}'.")
+    if breakpoint_id not in self._breakpoint_enabled_by_id:
+      raise KeyError(f"Breakpoint '{breakpoint_id}' is not set.")
+    self._breakpoint_enabled_by_id[breakpoint_id] = enabled
+    self._last_highlight = self._buildCurrentTraceHighlight()
+    return self.getSession()
+
+  def reorderBreakpoints(self, breakpoint_ids: list[str]) -> HsmViewerSession:
+    """Persist one explicit order for the currently set debugger breakpoints."""
+
+    ordered_breakpoint_ids: list[str] = []
+    seen_breakpoint_ids: set[str] = set()
+    for breakpoint_id in breakpoint_ids:
+      if breakpoint_id not in self._breakpoint_targets:
+        raise KeyError(f"Unknown breakpoint_id '{breakpoint_id}'.")
+      if breakpoint_id not in self._breakpoint_enabled_by_id:
+        raise ValueError(f"Breakpoint '{breakpoint_id}' is not set.")
+      if breakpoint_id in seen_breakpoint_ids:
+        raise ValueError(f"Breakpoint '{breakpoint_id}' was provided more than once.")
+      seen_breakpoint_ids.add(breakpoint_id)
+      ordered_breakpoint_ids.append(breakpoint_id)
+
+    current_set_breakpoint_ids = set(self._breakpoint_enabled_by_id)
+    if seen_breakpoint_ids != current_set_breakpoint_ids:
+      raise ValueError(
+        "Breakpoint reorder payload must include every set breakpoint exactly once."
+      )
+
+    self._breakpoint_order = ordered_breakpoint_ids
     self._last_highlight = self._buildCurrentTraceHighlight()
     return self.getSession()
 
@@ -202,12 +318,78 @@ class HsmViewerServerController:
     runtime.init(self._model)
     return runtime
 
-  def _advanceToNextExecutableStepForViewer(self) -> None:
+  def _snapshotVariableValues(self) -> dict[str, Any]:
+    """Return a detached snapshot of current runtime variable values."""
+
+    return {
+      variable["name"]: deepcopy(self._runtime.getVariable(variable["name"]))
+      for variable in self._model.getVariables()
+    }
+
+  def _diffVariableIds(self, initial_variable_values: dict[str, Any]) -> tuple[str, ...]:
+    """Return variable ids whose current value differs from one snapshot."""
+
+    return tuple(
+      variable["name"]
+      for variable in self._model.getVariables()
+      if (
+        self._runtime.getVariable(variable["name"])
+        != initial_variable_values[variable["name"]]
+      )
+    )
+
+  def _playUntilBreakpoint(self) -> None:
+    """Run pending work until idle or before the next active breakpoint step."""
+
+    self._runtime.is_paused = False
+    skipped_breakpoint_id = self._getPendingBreakpointId()
+
+    while True:
+      self._advanceToNextExecutableStepForViewer(
+        stop_on_breakpoint=True,
+        skipped_breakpoint_id=skipped_breakpoint_id,
+      )
+      next_step = self._runtime.getNextStep()
+      if next_step is None:
+        if not self._runtime.getEventQueue():
+          self._runtime.is_paused = False
+          return
+        self._runtime.step()
+        skipped_breakpoint_id = None
+        continue
+
+      breakpoint_id = self._breakpointIdForStep(next_step)
+      if (
+        breakpoint_id is not None
+        and self._isBreakpointEnabled(breakpoint_id)
+        and breakpoint_id != skipped_breakpoint_id
+      ):
+        self._runtime.pause()
+        return
+
+      self._runtime.step()
+      skipped_breakpoint_id = None
+
+  def _advanceToNextExecutableStepForViewer(
+    self,
+    *,
+    stop_on_breakpoint: bool = True,
+    skipped_breakpoint_id: str | None = None,
+  ) -> None:
     """Consume pending entries that should be shown only as completed path."""
 
     while True:
       next_step = self._runtime.getNextStep()
       if next_step is None:
+        return
+      breakpoint_id = self._breakpointIdForStep(next_step)
+      if (
+        stop_on_breakpoint
+        and breakpoint_id is not None
+        and self._isBreakpointEnabled(breakpoint_id)
+        and breakpoint_id != skipped_breakpoint_id
+      ):
+        self._runtime.pause()
         return
       if next_step["kind"] == "change_active_state":
         self._runtime.step()
@@ -283,6 +465,312 @@ class HsmViewerServerController:
       "can_step": has_pending_execution or bool(queued_events),
     }
 
+  def _serializeBreakpoints(self) -> tuple[HsmViewerBreakpointTarget, ...]:
+    """Serialize all available breakpoint targets with current active state."""
+
+    return tuple(
+      HsmViewerBreakpointTarget(
+        id=target.id,
+        label=target.label,
+        svg_ids=target.svg_ids,
+        text_ids=target.text_ids,
+        is_set=target.id in self._breakpoint_enabled_by_id,
+        enabled=self._isBreakpointEnabled(target.id),
+      )
+      for target in (
+        self._breakpoint_targets[breakpoint_id]
+        for breakpoint_id in self._iterSerializedBreakpointIds()
+      )
+    )
+
+  def _iterSerializedBreakpointIds(self) -> tuple[str, ...]:
+    """Return breakpoint ids ordered for viewer serialization."""
+
+    ordered_set_breakpoint_ids = [
+      breakpoint_id
+      for breakpoint_id in self._breakpoint_order
+      if breakpoint_id in self._breakpoint_enabled_by_id
+    ]
+    remaining_set_breakpoint_ids = [
+      breakpoint_id
+      for breakpoint_id in self._breakpoint_target_ids
+      if (
+        breakpoint_id in self._breakpoint_enabled_by_id
+        and breakpoint_id not in ordered_set_breakpoint_ids
+      )
+    ]
+    unset_breakpoint_ids = [
+      breakpoint_id
+      for breakpoint_id in self._breakpoint_target_ids
+      if breakpoint_id not in self._breakpoint_enabled_by_id
+    ]
+    return tuple(
+      ordered_set_breakpoint_ids + remaining_set_breakpoint_ids + unset_breakpoint_ids
+    )
+
+  def _hasEnabledBreakpoints(self) -> bool:
+    """Return whether any set breakpoint is currently enabled."""
+
+    return any(self._breakpoint_enabled_by_id.values())
+
+  def _isBreakpointEnabled(self, breakpoint_id: str) -> bool:
+    """Return whether one breakpoint is set and enabled."""
+
+    return self._breakpoint_enabled_by_id.get(breakpoint_id, False)
+
+  def _buildBreakpointTargets(self) -> dict[str, HsmViewerBreakpointTarget]:
+    """Build semantic debugger breakpoint targets backed by rendered SVG text ids."""
+
+    targets: dict[str, HsmViewerBreakpointTarget] = {}
+    for state in self._model.iterStates():
+      state_id = state["id"]
+      self._addBreakpointTarget(
+        targets,
+        breakpoint_id=self._breakpointKey("change_active_state", state_id),
+        label=f"Enter state: {self._model.getStateLabel(state_id)}",
+        svg_ids=(self._rendered_svg.getStateId(state_id),),
+        text_ids=self._rendered_svg.getStateLabelTextIds(state_id),
+      )
+
+      for section_name, activities in (
+        ("on_entry", self._model.getStateOnEntry(state_id)),
+        ("on_exit", self._model.getStateOnExit(state_id)),
+      ):
+        for activity in activities:
+          activity_key = self._callableKey(activity)
+          self._addBreakpointTarget(
+            targets,
+            breakpoint_id=self._breakpointKey(section_name, state_id, activity_key),
+            label=(
+              f"{self._formatHookName(section_name)}: "
+              f"{self._model.getStateLabel(state_id)} / {activity['name']}"
+            ),
+            svg_ids=(self._rendered_svg.getStateId(state_id),),
+            text_ids=self._rendered_svg.getStateHookActivityTextIds(
+              state_id,
+              section_name,
+              activity,
+            ),
+          )
+
+      for transition in self._model.getStateInternalTransitions(state_id):
+        event_id = transition["event_id"]
+        for activity in transition.get("activities", []):
+          activity_key = self._callableKey(activity)
+          transition_ids = self._rendered_svg.getInternalTransitionIds(state_id, event_id)
+          text_ids: list[str] = []
+          for transition_id in transition_ids:
+            text_ids.extend(
+              self._rendered_svg.getInternalTransitionActivityTextIds(
+                transition_id,
+                activity,
+              )
+            )
+          self._addBreakpointTarget(
+            targets,
+            breakpoint_id=self._breakpointKey(
+              "internal_transition",
+              state_id,
+              event_id,
+              activity_key,
+            ),
+            label=(
+              "Internal transition: "
+              f"{self._model.getStateLabel(state_id)} / {event_id} / {activity['name']}"
+            ),
+            svg_ids=transition_ids,
+            text_ids=tuple(text_ids),
+          )
+
+      if self._model.hasStateInitialTransition(state_id):
+        target_state_id = self._model.getStateInitialTargetId(state_id)
+        transition_id = self._rendered_svg.getInitialTransitionId(state_id)
+        for activity in self._model.getStateInitialTransitionActivities(state_id):
+          activity_key = self._callableKey(activity)
+          self._addBreakpointTarget(
+            targets,
+            breakpoint_id=self._breakpointKey(
+              "initial_transition",
+              state_id,
+              target_state_id,
+              activity_key,
+            ),
+            label=(
+              "Initial transition: "
+              f"{self._model.getStateLabel(state_id)} -> "
+              f"{self._model.getStateLabel(target_state_id)} / {activity['name']}"
+            ),
+            svg_ids=(transition_id,),
+            text_ids=self._rendered_svg.getInitialTransitionActivityTextIds(
+              transition_id,
+              activity,
+            ),
+          )
+
+      for transition in self._model.getOutgoingExternalTransitions(state_id):
+        self._appendExternalBreakpointTargets(targets, state_id, transition)
+
+    return targets
+
+  def _appendExternalBreakpointTargets(
+    self,
+    targets: dict[str, HsmViewerBreakpointTarget],
+    state_id: str,
+    transition: dict[str, Any],
+  ) -> None:
+    """Append breakpoint targets for one authored external transition."""
+
+    event_id = transition["event_id"]
+    guard_condition = transition.get("guard_condition")
+    if guard_condition is None:
+      target_state_id = transition["target_id"]
+      transition_ids = self._rendered_svg.getExternalTransitionIds(
+        state_id,
+        event_id,
+        target_state_id,
+      )
+      for activity in transition.get("activities", []):
+        self._addTransitionActivityBreakpointTarget(
+          targets,
+          kind="external_transition",
+          state_id=state_id,
+          event_id=event_id,
+          target_state_id=target_state_id,
+          transition_ids=transition_ids,
+          activity=activity,
+        )
+      return
+
+    guard_activity = guard_condition["guard_activity"]
+    guard_activity_key = self._callableKey(guard_activity)
+    self._addBreakpointTarget(
+      targets,
+      breakpoint_id=self._breakpointKey("guard_condition", state_id, event_id, guard_activity_key),
+      label=(
+        "Guard: "
+        f"{self._model.getStateLabel(state_id)} / {event_id} / {guard_activity['name']}"
+      ),
+      svg_ids=self._rendered_svg.getGuardNodeIds(state_id, event_id),
+      text_ids=self._rendered_svg.getGuardNodeTextIds(state_id, event_id),
+    )
+
+    guarded_ids = self._rendered_svg.getGuardedTransitionIds(state_id, event_id)
+    for activity in transition.get("activities", []):
+      self._addTransitionActivityBreakpointTarget(
+        targets,
+        kind="guarded_transition",
+        state_id=state_id,
+        event_id=event_id,
+        target_state_id="guard",
+        transition_ids=guarded_ids,
+        activity=activity,
+      )
+
+    for result, branch_key in ((True, "true_branch"), (False, "false_branch")):
+      branch = guard_condition[branch_key]
+      target_state_id = branch["target_id"]
+      branch_ids = self._rendered_svg.getGuardBranchIds(
+        state_id,
+        event_id,
+        outcome=result,
+        target_state_id=target_state_id,
+      )
+      for activity in branch.get("activities", []):
+        activity_key = self._callableKey(activity)
+        text_ids: list[str] = []
+        for branch_id in branch_ids:
+          text_ids.extend(
+            self._rendered_svg.getExternalTransitionActivityTextIds(
+              branch_id,
+              activity,
+            )
+          )
+        self._addBreakpointTarget(
+          targets,
+          breakpoint_id=self._breakpointKey(
+            "guard_branch_transition",
+            state_id,
+            event_id,
+            str(result),
+            target_state_id,
+            activity_key,
+          ),
+          label=(
+            "Guard branch: "
+            f"{event_id} {'true' if result else 'false'} -> "
+            f"{self._model.getStateLabel(target_state_id)} / {activity['name']}"
+          ),
+          svg_ids=branch_ids,
+          text_ids=tuple(text_ids),
+        )
+
+  def _addTransitionActivityBreakpointTarget(
+    self,
+    targets: dict[str, HsmViewerBreakpointTarget],
+    *,
+    kind: str,
+    state_id: str,
+    event_id: str,
+    target_state_id: str,
+    transition_ids: tuple[str, ...],
+    activity: dict[str, str],
+  ) -> None:
+    """Append one external-transition activity breakpoint target."""
+
+    activity_key = self._callableKey(activity)
+    target_label = (
+      "guard"
+      if target_state_id == "guard"
+      else self._model.getStateLabel(target_state_id)
+    )
+    text_ids: list[str] = []
+    for transition_id in transition_ids:
+      text_ids.extend(
+        self._rendered_svg.getExternalTransitionActivityTextIds(
+          transition_id,
+          activity,
+        )
+      )
+    self._addBreakpointTarget(
+      targets,
+      breakpoint_id=self._breakpointKey(
+        kind,
+        state_id,
+        event_id,
+        target_state_id,
+        activity_key,
+      ),
+      label=(
+        "Transition: "
+        f"{self._model.getStateLabel(state_id)} --{event_id}--> "
+        f"{target_label} / {activity['name']}"
+      ),
+      svg_ids=transition_ids,
+      text_ids=tuple(text_ids),
+    )
+
+  def _addBreakpointTarget(
+    self,
+    targets: dict[str, HsmViewerBreakpointTarget],
+    *,
+    breakpoint_id: str,
+    label: str,
+    svg_ids: tuple[str, ...],
+    text_ids: tuple[str, ...],
+  ) -> None:
+    """Store one breakpoint target when it has a rendered text anchor."""
+
+    if not text_ids:
+      return
+    targets[breakpoint_id] = HsmViewerBreakpointTarget(
+      id=breakpoint_id,
+      label=label,
+      svg_ids=svg_ids,
+      text_ids=text_ids,
+      is_set=breakpoint_id in self._breakpoint_enabled_by_id,
+      enabled=self._isBreakpointEnabled(breakpoint_id),
+    )
+
   def _buildCurrentTraceHighlight(self) -> HsmViewerHighlight:
     """Resolve the latest runtime trace into SVG ids for highlighting."""
 
@@ -294,7 +782,14 @@ class HsmViewerServerController:
     current_text_ids: tuple[str, ...] = ()
     next_step = self._runtime.getNextStep()
     if next_step is not None:
-      if next_step["kind"] != "change_active_state":
+      if next_step["kind"] == "change_active_state":
+        current_transition_ids = (
+          self._rendered_svg.getStateId(next_step["target_state_id"]),
+        )
+        current_text_ids = self._rendered_svg.getStateLabelTextIds(
+          next_step["target_state_id"]
+        )
+      else:
         current_transition_ids, current_text_ids = self._buildCurrentEntryHighlightIds(next_step)
     return HsmViewerHighlight(
       state_ids=state_ids,
@@ -303,6 +798,93 @@ class HsmViewerServerController:
       current_transition_ids=tuple(dict.fromkeys(current_transition_ids)),
       current_text_ids=tuple(dict.fromkeys(current_text_ids)),
     )
+
+  def _getPendingBreakpointId(self) -> str | None:
+    """Return the breakpoint id for the current pending step, if any."""
+
+    next_step = self._runtime.getNextStep()
+    if next_step is None:
+      return None
+    return self._breakpointIdForStep(next_step)
+
+  def _breakpointIdForStep(
+    self,
+    step: HsmRuntimePendingExecutionTypeAlias,
+  ) -> str | None:
+    """Return the semantic breakpoint id matching one pending runtime step."""
+
+    event_id = self._getPendingEventId()
+    kind = step["kind"]
+    if kind in {"on_entry", "on_exit"}:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        self._callableKey(step["activity"]),
+      )
+    if kind == "change_active_state":
+      return self._breakpointKey(kind, step["target_state_id"])
+    if kind == "initial_transition" and step["activity"] is not None:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        step["target_state_id"],
+        self._callableKey(step["activity"]),
+      )
+    if kind == "internal_transition" and event_id is not None and step["activity"] is not None:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        event_id,
+        self._callableKey(step["activity"]),
+      )
+    if kind == "external_transition" and event_id is not None and step["activity"] is not None:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        event_id,
+        step["target_state_id"],
+        self._callableKey(step["activity"]),
+      )
+    if kind == "guarded_transition" and event_id is not None and step["activity"] is not None:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        event_id,
+        "guard",
+        self._callableKey(step["activity"]),
+      )
+    if kind == "guard_branch_transition" and event_id is not None and step["activity"] is not None:
+      return self._breakpointKey(
+        kind,
+        step["source_state_id"],
+        event_id,
+        str(step["result"]),
+        step["target_state_id"],
+        self._callableKey(step["activity"]),
+      )
+    if kind == "pending_guard_condition" and event_id is not None:
+      return self._breakpointKey(
+        "guard_condition",
+        step["source_state_id"],
+        event_id,
+        self._callableKey(step["guard_activity"]),
+      )
+    return None
+
+  def _breakpointKey(self, *parts: object) -> str:
+    """Return one stable serialized breakpoint key."""
+
+    return "|".join("" if part is None else str(part) for part in parts)
+
+  def _callableKey(self, activity: dict[str, str]) -> str:
+    """Return one stable callable key matching render-layer text targeting."""
+
+    return f"{activity['module']}.{activity['name']}"
+
+  def _formatHookName(self, section_name: str) -> str:
+    """Return a readable label for one state hook section."""
+
+    return "On entry" if section_name == "on_entry" else "On exit"
 
   def _buildCurrentStateFocus(self) -> HsmViewerFocus:
     """Resolve state-focus and trace-focus contexts for the viewer."""
@@ -1071,11 +1653,7 @@ class HsmViewerRequestHandler(BaseHTTPRequestHandler):
     if self.path == "/":
       self._serveStatic("index.html", "text/html; charset=utf-8")
       return
-    if self.path == "/viewer.css":
-      self._serveStatic("viewer.css", "text/css; charset=utf-8")
-      return
-    if self.path == "/viewer.js":
-      self._serveStatic("viewer.js", "application/javascript; charset=utf-8")
+    if self._tryServeStaticPath():
       return
     if self.path == "/api/session.json":
       self._sendJson(asdict(self._controller.getSession()))
@@ -1142,6 +1720,63 @@ class HsmViewerRequestHandler(BaseHTTPRequestHandler):
         self.send_error(400, str(error))
       return
 
+    if self.path == "/api/debugger/breakpoints/toggle":
+      payload = self._readJsonBody()
+      try:
+        self._sendJson(
+          asdict(
+            self._controller.toggleBreakpoint(str(payload["breakpoint_id"]))
+          )
+        )
+      except KeyError as error:
+        self.send_error(400, str(error))
+      return
+
+    if self.path == "/api/debugger/breakpoints/remove":
+      payload = self._readJsonBody()
+      try:
+        self._sendJson(
+          asdict(
+            self._controller.removeBreakpoint(str(payload["breakpoint_id"]))
+          )
+        )
+      except KeyError as error:
+        self.send_error(400, str(error))
+      return
+
+    if self.path == "/api/debugger/breakpoints/enabled":
+      payload = self._readJsonBody()
+      try:
+        self._sendJson(
+          asdict(
+            self._controller.setBreakpointEnabled(
+              str(payload["breakpoint_id"]),
+              bool(payload["enabled"]),
+            )
+          )
+        )
+      except KeyError as error:
+        self.send_error(400, str(error))
+      return
+
+    if self.path == "/api/debugger/breakpoints/order":
+      payload = self._readJsonBody()
+      breakpoint_ids = payload.get("breakpoint_ids", [])
+      if not isinstance(breakpoint_ids, list):
+        self.send_error(400, "'breakpoint_ids' must be a JSON array.")
+        return
+      try:
+        self._sendJson(
+          asdict(
+            self._controller.reorderBreakpoints(
+              [str(breakpoint_id) for breakpoint_id in breakpoint_ids]
+            )
+          )
+        )
+      except (KeyError, ValueError) as error:
+        self.send_error(400, str(error))
+      return
+
     self.send_error(404)
 
   def log_message(self, format: str, *args: Any) -> None:
@@ -1169,6 +1804,33 @@ class HsmViewerRequestHandler(BaseHTTPRequestHandler):
       (_STATIC_DIR / file_name).read_bytes(),
       content_type=content_type,
     )
+
+  def _tryServeStaticPath(self) -> bool:
+    """Serve one package static file when the request path maps to it safely."""
+
+    parsed_path = urlparse(self.path).path
+    if parsed_path in {"", "/"}:
+      return False
+
+    relative_path = parsed_path.removeprefix("/")
+    static_path = (_STATIC_DIR / relative_path).resolve()
+    if not static_path.is_file():
+      return False
+    if _STATIC_DIR.resolve() not in static_path.parents:
+      self.send_error(403)
+      return True
+
+    content_type, _ = mimetypes.guess_type(static_path.name)
+    if content_type is None:
+      content_type = "application/octet-stream"
+    if content_type.startswith("text/") or content_type in {
+      "application/javascript",
+      "image/svg+xml",
+    }:
+      content_type = f"{content_type}; charset=utf-8"
+
+    self._sendBytes(static_path.read_bytes(), content_type=content_type)
+    return True
 
   def _sendJson(self, payload: dict[str, object]) -> None:
     """Serialize and send one JSON response payload."""

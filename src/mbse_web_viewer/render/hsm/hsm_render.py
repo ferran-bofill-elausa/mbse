@@ -53,6 +53,11 @@ class HsmRender:
 
     return self._requireHighlightIndex().state_ids_by_state_id[state_id]
 
+  def getStateLabelTextIds(self, state_id: str) -> tuple[str, ...]:
+    """Return text fragment ids for one rendered state label."""
+
+    return self._requireHighlightIndex().state_label_text_ids.get(state_id, ())
+
   def getRootInitialTransitionId(self) -> str:
     """Return the SVG id for the root initial transition."""
 
@@ -559,6 +564,7 @@ class HsmRender:
 
     return types.HsmSvgHighlightIndex(
       state_ids_by_state_id=prepared.state_ids_by_state_id,
+      state_label_text_ids=text_targets.state_label_ids,
       initial_transition_ids_by_owner_id=prepared.initial_transition_ids_by_owner_id,
       initial_transition_source_ids_by_owner_id=prepared.initial_transition_source_ids_by_owner_id,
       initial_transition_label_text_ids=text_targets.initial_transition_label_ids,

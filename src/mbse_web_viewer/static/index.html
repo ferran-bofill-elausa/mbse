@@ -11,30 +11,21 @@
       <aside class="panel sidebar">
         <section class="sidebar-section">
           <details class="sidebar-details" open>
-            <summary>Reset</summary>
-            <div class="reset-row">
-              <form id="reset-form">
-                <button type="submit">Reset runtime</button>
-              </form>
-              <button id="reset-view-button" type="button">Reset view</button>
-            </div>
-          </details>
-        </section>
-
-        <section class="sidebar-section">
-          <details class="sidebar-details" open>
             <summary>View</summary>
             <form id="view-mode-form">
-              <label for="view-mode-select">Mode</label>
-              <select id="view-mode-select" name="view_mode">
-                <option value="normal">Normal</option>
-                <option value="state">Focus current state</option>
-                <option value="trace">Focus last trace</option>
-              </select>
+              <div class="inline-control-row">
+                <label class="inline-control-label" for="view-mode-select">Mode</label>
+                <select id="view-mode-select" name="view_mode">
+                  <option value="normal">Normal</option>
+                  <option value="state">Focus current state</option>
+                  <option value="trace">Focus last trace</option>
+                </select>
+              </div>
               <label class="view-toggle-row" for="auto-center-checkbox">
                 <input id="auto-center-checkbox" name="auto_center" type="checkbox" checked />
                 <span>Auto-center active element</span>
               </label>
+              <button id="reset-view-button" type="button">Reset view</button>
             </form>
           </details>
         </section>
@@ -43,8 +34,10 @@
           <details class="sidebar-details" open>
             <summary>Events</summary>
             <form id="event-form">
-              <label for="event-select">Event</label>
-              <select id="event-select" name="event_id"></select>
+              <div class="inline-control-row">
+                <label class="inline-control-label" for="event-select">Event</label>
+                <select id="event-select" name="event_id"></select>
+              </div>
               <div id="event-parameter-list"></div>
               <button type="submit">Send event</button>
             </form>
@@ -62,10 +55,10 @@
           <details class="sidebar-details" open>
             <summary>Debug Info</summary>
             <div class="debugger-sidebar-box">
-              <div class="state-box" id="state-box"></div>
-              <div class="debugger-status" id="debugger-status"></div>
+              <div class="debugger-current-state" id="debugger-current-state"></div>
               <div class="debugger-current-event" id="debugger-current-event"></div>
               <div class="debugger-queue" id="debugger-queue"></div>
+              <div class="debugger-breakpoints" id="debugger-breakpoints"></div>
             </div>
           </details>
         </section>
@@ -89,9 +82,42 @@
 
       <section class="panel diagram-panel">
         <section class="debug-toolbar" aria-label="Debugger controls">
-          <button id="debugger-play-button" type="button" title="Play" aria-label="Play">&gt;</button>
-          <button id="debugger-pause-button" type="button" title="Pause" aria-label="Pause">||</button>
-          <button id="debugger-step-button" type="button" title="Step" aria-label="Step">-&gt;</button>
+          <button
+            id="debugger-reset-button"
+            class="debug-toolbar-button debug-toolbar-button-reset"
+            type="button"
+            title="Reset runtime"
+            aria-label="Reset runtime"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-reset.svg" alt="" aria-hidden="true" />
+          </button>
+          <button
+            id="debugger-play-button"
+            class="debug-toolbar-button debug-toolbar-button-play"
+            type="button"
+            title="Play"
+            aria-label="Play"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-play.svg" alt="" aria-hidden="true" />
+          </button>
+          <button
+            id="debugger-pause-button"
+            class="debug-toolbar-button debug-toolbar-button-pause"
+            type="button"
+            title="Pause"
+            aria-label="Pause"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-pause.svg" alt="" aria-hidden="true" />
+          </button>
+          <button
+            id="debugger-step-button"
+            class="debug-toolbar-button debug-toolbar-button-step"
+            type="button"
+            title="Step"
+            aria-label="Step"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-step.svg" alt="" aria-hidden="true" />
+          </button>
         </section>
         <div id="svg-viewport">
           <div id="svg-stage">

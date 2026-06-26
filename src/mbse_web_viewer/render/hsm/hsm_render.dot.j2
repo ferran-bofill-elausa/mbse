@@ -32,7 +32,7 @@ digraph "{{ view.document_id }}" {
 {% macro render_state_label(state) -%}
 <
 <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6">
-  <TR><TD BGCOLOR="{{ state.fill_rgb }}"><B>{{ state.title_text|e }}</B></TD></TR>
+  <TR><TD BGCOLOR="{{ state.fill_rgb }}" HREF="" TOOLTIP="state_label|{{ state.state_id|e }}"><B>{{ state.title_text|e }}</B></TD></TR>
 {%- if state.body_sections %}
   <TR><TD ALIGN="LEFT" BALIGN="LEFT">{{ render_state_body(state.body_sections) }}</TD></TR>
 {%- else %}

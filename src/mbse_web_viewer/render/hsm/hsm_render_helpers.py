@@ -120,6 +120,7 @@ def buildStateNodes(
     nodes.append(
       types.RenderStateNode(
         svg_id=svg_id,
+        state_id=state_id,
         title_text=model.getStateLabel(state_id),
         body_sections=body_sections,
         parent_svg_id=parent_svg_id,
@@ -653,6 +654,7 @@ class TextTargetCollector:
     self._next_fragment_index = 1
     self._state_hook_section_ids: dict[tuple[str, str], list[str]] = {}
     self._state_hook_activity_ids: dict[tuple[str, str, str], list[str]] = {}
+    self._state_label_ids: dict[str, list[str]] = {}
     self._initial_transition_label_ids: dict[str, list[str]] = {}
     self._initial_transition_activity_ids: dict[tuple[str, str], list[str]] = {}
     self._external_transition_label_ids: dict[str, list[str]] = {}
@@ -684,6 +686,9 @@ class TextTargetCollector:
         (parts[1], parts[2], parts[3]),
         [],
       ).append(fragment_id)
+      return
+    if kind == "state_label" and len(parts) == 2:
+      self._state_label_ids.setdefault(parts[1], []).append(fragment_id)
       return
     if kind == "initial_transition_label" and len(parts) == 2:
       self._initial_transition_label_ids.setdefault(parts[1], []).append(fragment_id)
@@ -729,6 +734,10 @@ class TextTargetCollector:
       state_hook_activity_ids={
         key: tuple(value)
         for key, value in self._state_hook_activity_ids.items()
+      },
+      state_label_ids={
+        key: tuple(value)
+        for key, value in self._state_label_ids.items()
       },
       initial_transition_label_ids={
         key: tuple(value)

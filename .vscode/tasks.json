@@ -10,6 +10,11 @@
       "label": "run_opencode_web_gui",
       "type": "shell",
       "command": "${TASKS_PATH}/run_opencode_web_gui.sh"
+    },
+    {
+      "label": "open_example_model",
+      "type": "shell",
+      "command": "${TASKS_PATH}/open_example_model.sh"
     }
   ]
 }

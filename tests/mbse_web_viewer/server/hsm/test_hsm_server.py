@@ -253,7 +253,9 @@ def test_hsm_server_set_variable_and_reset_refresh_session() -> None:
   reset = controller.reset()
 
   assert updated.variable_values["current_mode"] == "forced"
+  assert updated.changed_variable_ids == ("current_mode",)
   assert reset.variable_values["current_mode"] == "normal"
+  assert reset.changed_variable_ids == ()
   assert reset.state == {"id": None, "label": None}
 
 
@@ -268,7 +270,37 @@ def test_hsm_server_set_mode_event_refreshes_session_variable_values() -> None:
 
   assert session.state == {"id": "s41", "label": "S41"}
   assert session.variable_values["current_mode"] == "forced"
+  assert session.changed_variable_ids == ("current_mode",)
   assert session.last_trace.event_id == "set_mode"
+
+
+def test_hsm_server_reports_changed_variables_for_visible_flow() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  controller = _build_running_controller(model)
+
+  changed = controller.sendEvent("ping", {"value": 42})
+
+  assert changed.variable_values["last_ping_value"] == 42
+  assert changed.changed_variable_ids == ("last_ping_value",)
+
+  unchanged = controller.sendEvent("ping", {"value": 42})
+
+  assert unchanged.variable_values["last_ping_value"] == 42
+  assert unchanged.changed_variable_ids == ()
+
+
+def test_hsm_server_set_variable_reports_changed_variable() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  controller = HsmViewerServerController(model)
+
+  changed = controller.setVariable("current_mode", "forced")
+
+  assert changed.variable_values["current_mode"] == "forced"
+  assert changed.changed_variable_ids == ("current_mode",)
+
+  unchanged = controller.setVariable("current_mode", "forced")
+
+  assert unchanged.changed_variable_ids == ()
 
 
 def test_hsm_server_paused_step_flow_exposes_debug_state() -> None:
@@ -597,6 +629,125 @@ def test_hsm_server_focus_related_ids_include_current_highlights() -> None:
     assert _highlightIds(step_session).issubset(step_session.focus.trace_related_ids)
     if not step_session.debugger["has_pending_execution"] and not step_session.debugger["queued_events"]:
       break
+
+
+def test_hsm_server_exposes_and_toggles_breakpoint_targets() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  controller = HsmViewerServerController(model)
+  breakpoint_id = (
+    "on_entry|s2111|tests.reference_model.hsm.reference_hsm_callables.s2111_entry"
+  )
+
+  session = controller.getSession()
+
+  assert any(
+    target.id == breakpoint_id and target.is_set is False and target.enabled is False
+    for target in session.breakpoints
+  )
+
+  toggled = controller.toggleBreakpoint(breakpoint_id)
+
+  assert any(
+    target.id == breakpoint_id and target.is_set is True and target.enabled is True
+    for target in toggled.breakpoints
+  )
+
+
+def test_hsm_server_play_stops_before_active_breakpoint() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  rendered = HsmRender()
+  rendered.render(model)
+  controller = _build_running_controller(model)
+  breakpoint_id = (
+    "on_entry|s2111|tests.reference_model.hsm.reference_hsm_callables.s2111_entry"
+  )
+  controller.toggleBreakpoint(breakpoint_id)
+
+  stopped = controller.sendEvent("transition")
+
+  assert stopped.debugger["is_paused"] is True
+  assert stopped.debugger["has_pending_execution"] is True
+  assert stopped.state == {"id": "s11111", "label": "S11111"}
+  assert set(
+    rendered.getStateHookActivityTextIds(
+      "s2111",
+      "on_entry",
+      {
+        "module": "tests.reference_model.hsm.reference_hsm_callables",
+        "name": "s2111_entry",
+      },
+    )
+  ).issubset(stopped.highlight.current_text_ids)
+
+  continued = controller.play()
+
+  assert continued.debugger["is_paused"] is False
+  assert continued.debugger["has_pending_execution"] is False
+  assert continued.state == {"id": "s2111", "label": "S2111"}
+
+
+def test_hsm_server_disabled_breakpoint_does_not_stop_play() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  controller = _build_running_controller(model)
+  breakpoint_id = (
+    "on_entry|s2111|tests.reference_model.hsm.reference_hsm_callables.s2111_entry"
+  )
+  controller.toggleBreakpoint(breakpoint_id)
+  disabled = controller.setBreakpointEnabled(breakpoint_id, False)
+
+  assert any(
+    target.id == breakpoint_id and target.is_set is True and target.enabled is False
+    for target in disabled.breakpoints
+  )
+
+  session = controller.sendEvent("transition")
+
+  assert session.debugger["is_paused"] is False
+  assert session.debugger["has_pending_execution"] is False
+  assert session.state == {"id": "s2111", "label": "S2111"}
+
+
+def test_hsm_server_persists_custom_breakpoint_order() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+  controller = HsmViewerServerController(model)
+  breakpoint_ids = [
+    "on_entry|s2111|tests.reference_model.hsm.reference_hsm_callables.s2111_entry",
+    "on_exit|s11111|tests.reference_model.hsm.reference_hsm_callables.s11111_exit",
+    "change_active_state|s41",
+  ]
+
+  for breakpoint_id in breakpoint_ids:
+    controller.toggleBreakpoint(breakpoint_id)
+
+  reordered_ids = [breakpoint_ids[2], breakpoint_ids[0], breakpoint_ids[1]]
+  reordered = controller.reorderBreakpoints(reordered_ids)
+
+  assert [
+    target.id
+    for target in reordered.breakpoints
+    if target.is_set
+  ] == reordered_ids
+
+  reset = controller.reset()
+
+  assert [
+    target.id
+    for target in reset.breakpoints
+    if target.is_set
+  ] == reordered_ids
+
+  appended = controller.toggleBreakpoint(
+    "on_entry|s1|tests.reference_model.hsm.reference_hsm_callables.s1_entry"
+  )
+
+  assert [
+    target.id
+    for target in appended.breakpoints
+    if target.is_set
+  ] == [
+    *reordered_ids,
+    "on_entry|s1|tests.reference_model.hsm.reference_hsm_callables.s1_entry",
+  ]
 
 
 def test_hsm_server_step_and_play_match_final_trace_focus() -> None:
