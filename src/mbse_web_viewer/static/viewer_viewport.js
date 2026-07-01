@@ -59,6 +59,25 @@ export function refreshFitBaseline({ apply = false } = {}) {
 }
 
 
+export function captureViewportState() {
+  const viewport = document.getElementById("svg-viewport");
+  return {
+    zoomScale: viewerState.zoomScale,
+    scrollLeft: viewport.scrollLeft,
+    scrollTop: viewport.scrollTop,
+    fitBaseline: { ...viewerState.fitBaseline },
+    lastAutoCenteredFocusKey: viewerState.lastAutoCenteredFocusKey,
+  };
+}
+
+
+export function restoreViewportState(viewState) {
+  viewerState.fitBaseline = { ...viewState.fitBaseline };
+  applyViewBaseline(viewState);
+  viewerState.lastAutoCenteredFocusKey = viewState.lastAutoCenteredFocusKey;
+}
+
+
 export function syncStageSize() {
   const viewportSize = measureViewportContentSize();
   const stage = document.getElementById("svg-stage");

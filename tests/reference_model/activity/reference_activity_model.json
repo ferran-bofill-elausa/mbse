@@ -2,47 +2,47 @@
   "schema_version": "mbse-activity-model-v0",
   "document_id": "reference_activity",
   "initial": {
-    "target_id": "check_ready"
+    "target_id": "check_full_reset"
   },
   "actions": [
     {
-      "id": "prepare_output",
-      "label": "Prepare Output",
+      "id": "reset_context_variables",
+      "label": "Reset Context Variables",
       "executable": {
         "kind": "action_language",
         "module": "tests.reference_model.activity.reference_activity_executables",
-        "name": "prepare_output"
+        "name": "reset_context_variables"
       },
       "transition": {
-        "target_id": "done"
+        "target_id": "reset_done"
       }
     }
   ],
   "decisions": [
     {
-      "id": "check_ready",
-      "label": "Check Ready",
+      "id": "check_full_reset",
+      "label": "Check Full Reset",
       "condition": {
         "kind": "action_language",
         "module": "tests.reference_model.activity.reference_activity_executables",
-        "name": "is_ready"
+        "name": "is_full_reset_requested"
       },
       "true_transition": {
-        "target_id": "prepare_output"
+        "target_id": "reset_context_variables"
       },
       "false_transition": {
-        "target_id": "skipped"
+        "target_id": "reset_skipped"
       }
     }
   ],
   "finals": [
     {
-      "id": "done",
-      "label": "Done"
+      "id": "reset_done",
+      "label": "Reset Done"
     },
     {
-      "id": "skipped",
-      "label": "Skipped"
+      "id": "reset_skipped",
+      "label": "Reset Skipped"
     }
   ]
 }

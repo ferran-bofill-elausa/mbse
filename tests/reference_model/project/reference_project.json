@@ -1,0 +1,6 @@
+{
+  "schema_version": "mbse-project-model-v0",
+  "document_id": "reference_project",
+  "project_root": "..",
+  "entrypoint": "reference_hsm"
+}

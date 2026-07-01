@@ -1,6 +1,6 @@
-# HSM Server Test
+# HSM Viewer Server Test
 
-This test file validates the minimal HSM viewer server controller.
+This test file validates the project-backed viewer server controller with an HSM entry model.
 
 - Confirms the session exposes rendered SVG metadata and current runtime state.
 - Confirms reset, event dispatch, and variable writes refresh the derived session.

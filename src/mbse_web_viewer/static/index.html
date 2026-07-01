@@ -18,7 +18,7 @@
                 <select id="model-select" name="model_id"></select>
               </div>
               <div class="inline-control-row">
-                <label class="inline-control-label" for="view-mode-select">Mode</label>
+                <label class="inline-control-label" for="view-mode-select">HSM mode</label>
                 <select id="view-mode-select" name="view_mode">
                   <option value="normal">Normal</option>
                   <option value="state">Focus current state</option>
@@ -114,13 +114,31 @@
             <img class="debug-toolbar-icon" src="/assets/debugger-pause.svg" alt="" aria-hidden="true" />
           </button>
           <button
-            id="debugger-step-button"
+            id="debugger-step-into-button"
             class="debug-toolbar-button debug-toolbar-button-step"
             type="button"
-            title="Step"
-            aria-label="Step"
+            title="Step into"
+            aria-label="Step into"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-step-into.svg" alt="" aria-hidden="true" />
+          </button>
+          <button
+            id="debugger-step-over-button"
+            class="debug-toolbar-button debug-toolbar-button-step"
+            type="button"
+            title="Step over"
+            aria-label="Step over"
           >
             <img class="debug-toolbar-icon" src="/assets/debugger-step.svg" alt="" aria-hidden="true" />
+          </button>
+          <button
+            id="debugger-step-out-button"
+            class="debug-toolbar-button debug-toolbar-button-step"
+            type="button"
+            title="Step out"
+            aria-label="Step out"
+          >
+            <img class="debug-toolbar-icon" src="/assets/debugger-step-out.svg" alt="" aria-hidden="true" />
           </button>
         </section>
         <div id="svg-viewport">

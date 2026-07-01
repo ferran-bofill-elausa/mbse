@@ -129,6 +129,83 @@ class ActivityRender:
 
     return self._requireHighlightIndex().transition_label_text_ids.get(edge_id, ())
 
+  def getInitialTransitionOwnedIds(self) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by the initial transition."""
+
+    highlight_index = self._requireHighlightIndex()
+    return (
+      highlight_index.initial_transition_id,
+      highlight_index.initial_transition_source_id,
+    )
+
+  def getActionOwnedIds(self, action_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one rendered action."""
+
+    highlight_index = self._requireHighlightIndex()
+    owned_ids = [self.getActionId(action_id)]
+    owned_ids.extend(highlight_index.action_label_text_ids.get(action_id, ()))
+    owned_ids.extend(self._getTextIdsByFirstKeyPart(
+      highlight_index.action_executable_text_ids,
+      action_id,
+    ))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getDecisionOwnedIds(self, decision_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one rendered decision."""
+
+    highlight_index = self._requireHighlightIndex()
+    owned_ids = [self.getDecisionId(decision_id)]
+    owned_ids.extend(highlight_index.decision_label_text_ids.get(decision_id, ()))
+    owned_ids.extend(self._getTextIdsByFirstKeyPart(
+      highlight_index.decision_condition_text_ids,
+      decision_id,
+    ))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getFinalOwnedIds(self, final_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one rendered final node."""
+
+    owned_ids = [self.getFinalId(final_id)]
+    owned_ids.extend(self.getFinalLabelTextIds(final_id))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getTransitionOwnedIds(self, edge_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one rendered transition edge."""
+
+    owned_ids = [edge_id]
+    owned_ids.extend(self.getTransitionLabelTextIds(edge_id))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getOwnedIdsForHighlightId(self, element_id: str) -> tuple[str, ...]:
+    """Return the complete visible owner set for one SVG highlight id."""
+
+    highlight_index = self._requireHighlightIndex()
+    if element_id in self.getInitialTransitionOwnedIds():
+      return self.getInitialTransitionOwnedIds()
+
+    for action_id, action_svg_id in highlight_index.action_ids_by_action_id.items():
+      if element_id == action_svg_id or element_id in self.getActionOwnedIds(action_id):
+        return self.getActionOwnedIds(action_id)
+
+    for decision_id, decision_svg_id in (
+      highlight_index.decision_ids_by_decision_id.items()
+    ):
+      if (
+        element_id == decision_svg_id
+        or element_id in self.getDecisionOwnedIds(decision_id)
+      ):
+        return self.getDecisionOwnedIds(decision_id)
+
+    for final_id, final_svg_id in highlight_index.final_ids_by_final_id.items():
+      if element_id == final_svg_id or element_id in self.getFinalOwnedIds(final_id):
+        return self.getFinalOwnedIds(final_id)
+
+    for edge_id in self._iterTransitionIds():
+      if element_id in self.getTransitionOwnedIds(edge_id):
+        return self.getTransitionOwnedIds(edge_id)
+
+    return (element_id,)
+
   def _prepareView(self, model: ActivityModel) -> types.RenderBuildResult:
     """Prepare render artifacts for one Activity model."""
 
@@ -388,3 +465,20 @@ class ActivityRender:
     if self._highlight_index is None:
       raise RuntimeError("Activity has not been rendered.")
     return self._highlight_index
+
+  def _getTextIdsByFirstKeyPart(self, text_ids_by_key, first_key_part: str) -> list[str]:
+    """Return text ids whose semantic key starts with one SVG id."""
+
+    ids: list[str] = []
+    for key, text_ids in text_ids_by_key.items():
+      if key[0] == first_key_part:
+        ids.extend(text_ids)
+    return ids
+
+  def _iterTransitionIds(self):
+    """Yield all rendered transition SVG ids."""
+
+    highlight_index = self._requireHighlightIndex()
+    yield highlight_index.initial_transition_id
+    yield from highlight_index.action_transition_ids_by_action_id.values()
+    yield from highlight_index.decision_transition_ids_by_key.values()

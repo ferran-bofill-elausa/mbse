@@ -13,6 +13,14 @@ from mbse.model.project.project_model import ProjectModel
 from mbse.model.project.project_registry import ProjectRegistry
 
 
+REFERENCE_PROJECT_PATH = (
+  Path(__file__).resolve().parents[3]
+  / "reference_model"
+  / "project"
+  / "reference_project.json"
+)
+
+
 def _write_json(path: Path, payload: dict[str, object]) -> Path:
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(json.dumps(payload), encoding="utf-8")
@@ -134,6 +142,17 @@ def test_project_registry_iterates_executable_models(tmp_path: Path) -> None:
   assert [model.getDocumentId() for model in registry.iterExecutableModels()] == [
     "main_hsm",
     "prepare_order",
+  ]
+
+
+def test_project_registry_loads_reference_project() -> None:
+  registry = ProjectRegistry.load(REFERENCE_PROJECT_PATH)
+
+  assert registry.getEntrypointModel().getDocumentId() == "reference_hsm"
+  assert registry.getContext().getDocumentId() == "reference_context"
+  assert [model.getDocumentId() for model in registry.iterExecutableModels()] == [
+    "reference_activity",
+    "reference_hsm",
   ]
 
 

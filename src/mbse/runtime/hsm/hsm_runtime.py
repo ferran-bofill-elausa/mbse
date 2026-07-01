@@ -10,6 +10,7 @@ from typing import TypedDict
 
 from mbse.model.context.context_model import ContextModel
 from mbse.model.hsm.hsm_model import HsmModel
+from mbse.runtime.runtime_signals import RuntimeExecutionSuspended
 
 
 HsmRuntimeExecutableRef: TypeAlias = dict[str, Any]
@@ -392,44 +393,48 @@ class HsmRuntime:
     entry = pending_execution["entries"].pop(0)
     kind = entry["kind"]
 
-    if kind == "pending_guard_condition":
-      # Resolve the decision now and splice the chosen branch back into pending.
-      guard_result = self._callGuard(
-        entry["guard_activity"],
-        pending_execution["event"],
-      )
-      branch_entries = entry["true_branch"] if guard_result else entry["false_branch"]
-      target_state_id = (
-        entry["true_target_state_id"]
-        if guard_result
-        else entry["false_target_state_id"]
-      )
-      target_state_label = (
-        entry["true_target_state_label"]
-        if guard_result
-        else entry["false_target_state_label"]
-      )
+    try:
+      if kind == "pending_guard_condition":
+        # Resolve the decision now and splice the chosen branch back into pending.
+        guard_result = self._callGuard(
+          entry["guard_activity"],
+          pending_execution["event"],
+        )
+        branch_entries = entry["true_branch"] if guard_result else entry["false_branch"]
+        target_state_id = (
+          entry["true_target_state_id"]
+          if guard_result
+          else entry["false_target_state_id"]
+        )
+        target_state_label = (
+          entry["true_target_state_label"]
+          if guard_result
+          else entry["false_target_state_label"]
+        )
 
-      self.execution_log[-1]["entries"].append(
-        {
-          "kind": "guard_condition",
-          "source_state_id": entry["source_state_id"],
-          "source_state_label": entry["source_state_label"],
-          "guard_activity": entry["guard_activity"],
-          "result": guard_result,
-          "target_state_id": target_state_id,
-          "target_state_label": target_state_label,
-        }
-      )
-      pending_execution["entries"][0:0] = branch_entries
-    elif kind == "change_active_state":
-      self.current_state_id = entry["target_state_id"]
-      self.execution_log[-1]["entries"].append(entry)
-    else:
-      # Executable steps are the only ones with user-code side effects.
-      if entry["activity"] is not None:
-        self._callActivity(entry["activity"], pending_execution["event"])
-      self.execution_log[-1]["entries"].append(entry)
+        self.execution_log[-1]["entries"].append(
+          {
+            "kind": "guard_condition",
+            "source_state_id": entry["source_state_id"],
+            "source_state_label": entry["source_state_label"],
+            "guard_activity": entry["guard_activity"],
+            "result": guard_result,
+            "target_state_id": target_state_id,
+            "target_state_label": target_state_label,
+          }
+        )
+        pending_execution["entries"][0:0] = branch_entries
+      elif kind == "change_active_state":
+        self.current_state_id = entry["target_state_id"]
+        self.execution_log[-1]["entries"].append(entry)
+      else:
+        # Executable steps are the only ones with user-code side effects.
+        if entry["activity"] is not None:
+          self._callActivity(entry["activity"], pending_execution["event"])
+        self.execution_log[-1]["entries"].append(entry)
+    except RuntimeExecutionSuspended:
+      pending_execution["entries"].insert(0, entry)
+      raise
 
     if not pending_execution["entries"]:
       self.pending_execution = None

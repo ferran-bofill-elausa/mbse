@@ -10,6 +10,7 @@ from typing import TypedDict
 
 from mbse.model.activity.activity_model import ActivityModel
 from mbse.model.context.context_model import ContextModel
+from mbse.runtime.runtime_signals import RuntimeExecutionSuspended
 
 
 ActivityRuntimeExecutableRef: TypeAlias = dict[str, Any]
@@ -216,34 +217,38 @@ class ActivityRuntime:
     entry = pending_execution["entries"].pop(0)
     kind = entry["kind"]
 
-    if kind == "initial":
-      self.execution_log[-1]["entries"].append(entry)
-    elif kind == "action":
-      self._callActivity(entry["executable"])
-      self.execution_log[-1]["entries"].append(entry)
-    elif kind == "pending_decision":
-      result = self._callCondition(entry["condition"])
-      branch_entries = entry["true_branch"] if result else entry["false_branch"]
-      target_id = entry["true_target_id"] if result else entry["false_target_id"]
-      target_label = entry["true_target_label"] if result else entry["false_target_label"]
-      target_type = entry["true_target_type"] if result else entry["false_target_type"]
-      self.execution_log[-1]["entries"].append(
-        {
-          "kind": "decision",
-          "decision_id": entry["decision_id"],
-          "decision_label": entry["decision_label"],
-          "condition": entry["condition"],
-          "result": result,
-          "target_id": target_id,
-          "target_label": target_label,
-          "target_type": target_type,
-        }
-      )
-      pending_execution["entries"][0:0] = branch_entries
-    elif kind == "final":
-      self.execution_log[-1]["entries"].append(entry)
-    else:
-      raise ValueError(f"Unknown activity runtime step kind '{kind}'.")
+    try:
+      if kind == "initial":
+        self.execution_log[-1]["entries"].append(entry)
+      elif kind == "action":
+        self._callActivity(entry["executable"])
+        self.execution_log[-1]["entries"].append(entry)
+      elif kind == "pending_decision":
+        result = self._callCondition(entry["condition"])
+        branch_entries = entry["true_branch"] if result else entry["false_branch"]
+        target_id = entry["true_target_id"] if result else entry["false_target_id"]
+        target_label = entry["true_target_label"] if result else entry["false_target_label"]
+        target_type = entry["true_target_type"] if result else entry["false_target_type"]
+        self.execution_log[-1]["entries"].append(
+          {
+            "kind": "decision",
+            "decision_id": entry["decision_id"],
+            "decision_label": entry["decision_label"],
+            "condition": entry["condition"],
+            "result": result,
+            "target_id": target_id,
+            "target_label": target_label,
+            "target_type": target_type,
+          }
+        )
+        pending_execution["entries"][0:0] = branch_entries
+      elif kind == "final":
+        self.execution_log[-1]["entries"].append(entry)
+      else:
+        raise ValueError(f"Unknown activity runtime step kind '{kind}'.")
+    except RuntimeExecutionSuspended:
+      pending_execution["entries"].insert(0, entry)
+      raise
 
     if not pending_execution["entries"]:
       self.pending_execution = None

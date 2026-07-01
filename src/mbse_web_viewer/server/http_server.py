@@ -22,9 +22,6 @@ _STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 class ViewerController(Protocol):
   """Controller contract consumed by the generic HTTP viewer transport."""
 
-  def getSvgText(self) -> str:
-    """Return the SVG document served by the viewer."""
-
   def getModelSvgText(self, model_id: str) -> str:
     """Return the SVG document for one rendered model."""
 
@@ -47,8 +44,14 @@ class ViewerController(Protocol):
   def pause(self) -> object:
     """Pause the runtime and return a viewer session dataclass."""
 
-  def stepExecution(self) -> object:
-    """Step the runtime and return a viewer session dataclass."""
+  def stepInto(self) -> object:
+    """Step into the runtime and return a viewer session dataclass."""
+
+  def stepOver(self) -> object:
+    """Step over the runtime and return a viewer session dataclass."""
+
+  def stepOut(self) -> object:
+    """Step out of the runtime and return a viewer session dataclass."""
 
   def setVariable(self, variable_id: str, value: Any) -> object:
     """Set one runtime variable and return a viewer session dataclass."""
@@ -116,13 +119,6 @@ class ViewerRequestHandler(BaseHTTPRequestHandler):
     if self.path == "/api/session.json":
       self._sendJson(asdict(self._controller.getSession()))
       return
-    if self.path == "/artifacts/diagram.svg":
-      self._sendBytes(
-        self._controller.getSvgText().encode("utf-8"),
-        content_type="image/svg+xml; charset=utf-8",
-      )
-      return
-
     parsed_path = urlparse(self.path).path
     if parsed_path.startswith("/artifacts/models/") and parsed_path.endswith("/diagram.svg"):
       model_id = parsed_path.removeprefix("/artifacts/models/").removesuffix("/diagram.svg")
@@ -174,9 +170,19 @@ class ViewerRequestHandler(BaseHTTPRequestHandler):
       self._sendJson(asdict(self._controller.pause()))
       return
 
-    if self.path == "/api/runtime/step":
+    if self.path == "/api/runtime/step-into":
       self._readJsonBody()
-      self._sendJson(asdict(self._controller.stepExecution()))
+      self._sendJson(asdict(self._controller.stepInto()))
+      return
+
+    if self.path == "/api/runtime/step-over":
+      self._readJsonBody()
+      self._sendJson(asdict(self._controller.stepOver()))
+      return
+
+    if self.path == "/api/runtime/step-out":
+      self._readJsonBody()
+      self._sendJson(asdict(self._controller.stepOut()))
       return
 
     if self.path == "/api/runtime/variables":

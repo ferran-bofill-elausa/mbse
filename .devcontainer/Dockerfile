@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     python3-setuptools \
     python-is-python3 \
+    xdg-utils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
     

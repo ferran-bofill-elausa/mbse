@@ -22,6 +22,7 @@ class HsmSvgHighlightIndex:
   guard_branch_ids_by_key: dict[tuple[str, str, bool, str], tuple[str, ...]]
   guard_node_text_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
   internal_transition_ids_by_key: dict[tuple[str, str], tuple[str, ...]]
+  internal_transition_owner_by_id: dict[str, tuple[str, str]]
   state_hook_section_text_ids: dict[tuple[str, str], tuple[str, ...]]
   state_hook_activity_text_ids: dict[tuple[str, str, str], tuple[str, ...]]
   external_transition_label_text_ids: dict[str, tuple[str, ...]]

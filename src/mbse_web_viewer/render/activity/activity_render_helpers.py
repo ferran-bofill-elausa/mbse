@@ -53,7 +53,7 @@ def actionLabelLines(action: dict[str, Any]) -> tuple[types.RenderTextLine, ...]
     ),
     types.RenderTextLine(
       fragments=(
-        types.RenderTextFragment(text="exec: "),
+        types.RenderTextFragment(text="actions: "),
         types.RenderTextFragment(
           text=executableLabel(executable),
           target_payload=f"action_executable|{action['id']}|{executableKey(executable)}",

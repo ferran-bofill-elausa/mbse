@@ -570,10 +570,10 @@ button:disabled {
 
 /* SVG highlight states. */
 
-.is-active-state > ellipse,
-.is-active-state > path,
-.is-active-state > polygon,
-.is-active-state > rect {
+.is-active-state ellipse,
+.is-active-state path,
+.is-active-state polygon,
+.is-active-state rect {
   stroke: #b42318;
   stroke-width: 2;
 }
@@ -605,12 +605,7 @@ button:disabled {
 .is-current-step > path,
 .is-current-step > polygon {
   stroke: #d92d20;
-}
-
-.is-current-step > ellipse,
-.is-current-step > circle,
-.is-current-step > polygon {
-  fill: #d92d20;
+  stroke-width: 3;
 }
 
 .is-current-step-text {

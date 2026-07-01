@@ -33,47 +33,47 @@ def test_load_and_validate_activity_model() -> None:
 
   assert model.getDocumentId() == "reference_activity"
   assert model.getSchemaVersion() == "mbse-activity-model-v0"
-  assert model.getInitialTargetId() == "check_ready"
+  assert model.getInitialTargetId() == "check_full_reset"
 
 
 def test_activity_model_exposes_expected_structure_queries() -> None:
   model = ActivityModel.loadAndValidate(FIXTURE_PATH)
 
-  assert model.getInitial() == {"target_id": "check_ready"}
-  assert [action["id"] for action in model.getActions()] == ["prepare_output"]
-  assert [decision["id"] for decision in model.getDecisions()] == ["check_ready"]
-  assert [final["id"] for final in model.getFinals()] == ["done", "skipped"]
+  assert model.getInitial() == {"target_id": "check_full_reset"}
+  assert [action["id"] for action in model.getActions()] == ["reset_context_variables"]
+  assert [decision["id"] for decision in model.getDecisions()] == ["check_full_reset"]
+  assert [final["id"] for final in model.getFinals()] == ["reset_done", "reset_skipped"]
 
-  assert model.getActionById("prepare_output") == {
-    "id": "prepare_output",
-    "label": "Prepare Output",
+  assert model.getActionById("reset_context_variables") == {
+    "id": "reset_context_variables",
+    "label": "Reset Context Variables",
     "executable": {
       "kind": "action_language",
       "module": "tests.reference_model.activity.reference_activity_executables",
-      "name": "prepare_output",
+      "name": "reset_context_variables",
     },
     "transition": {
-      "target_id": "done",
+      "target_id": "reset_done",
     },
   }
-  assert model.getDecisionById("check_ready")["true_transition"] == {
-    "target_id": "prepare_output"
+  assert model.getDecisionById("check_full_reset")["true_transition"] == {
+    "target_id": "reset_context_variables"
   }
-  assert model.getDecisionById("check_ready")["false_transition"] == {
-    "target_id": "skipped"
+  assert model.getDecisionById("check_full_reset")["false_transition"] == {
+    "target_id": "reset_skipped"
   }
-  assert model.getFinalById("skipped") == {
-    "id": "skipped",
-    "label": "Skipped",
+  assert model.getFinalById("reset_skipped") == {
+    "id": "reset_skipped",
+    "label": "Reset Skipped",
   }
 
 
 def test_activity_model_exposes_labels() -> None:
   model = ActivityModel.loadAndValidate(FIXTURE_PATH)
 
-  assert model.getActionLabel("prepare_output") == "Prepare Output"
-  assert model.getDecisionLabel("check_ready") == "Check Ready"
-  assert model.getFinalLabel("done") == "Done"
+  assert model.getActionLabel("reset_context_variables") == "Reset Context Variables"
+  assert model.getDecisionLabel("check_full_reset") == "Check Full Reset"
+  assert model.getFinalLabel("reset_done") == "Reset Done"
 
 
 def test_activity_model_raises_for_unknown_ids() -> None:

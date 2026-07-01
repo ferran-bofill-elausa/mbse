@@ -112,3 +112,55 @@ def test_hsm_svg_exposes_model_executable_text_targets() -> None:
     rendered.getInitialTransitionId("s1"),
     {"kind": "model", "model_id": "child_activity"},
   )
+
+
+def test_hsm_svg_exposes_complete_visual_ownership_ids() -> None:
+  model = HsmModel.loadAndValidate(FIXTURE_PATH)
+
+  rendered = HsmRender()
+  rendered.render(model)
+
+  initial_id = rendered.getInitialTransitionId("s4")
+  initial_owned_ids = set(rendered.getInitialTransitionOwnedIds("s4"))
+  initial_activity_ids = set(rendered.getInitialTransitionActivityTextIds(
+    initial_id,
+    {
+      "kind": "action_language",
+      "module": "tests.reference_model.hsm.reference_hsm_executables",
+      "name": "s4_initial",
+    },
+  ))
+  assert initial_id in initial_owned_ids
+  assert rendered.getInitialTransitionSourceId("s4") in initial_owned_ids
+  assert set(rendered.getInitialTransitionLabelTextIds(initial_id)).issubset(
+    initial_owned_ids
+  )
+  assert initial_activity_ids.issubset(initial_owned_ids)
+  for activity_id in initial_activity_ids:
+    assert initial_owned_ids.issubset(rendered.getOwnedIdsForHighlightId(activity_id))
+
+  state_owned_ids = set(rendered.getStateOwnedIds("s41"))
+  assert rendered.getStateId("s41") in state_owned_ids
+  assert set(rendered.getStateLabelTextIds("s41")).issubset(state_owned_ids)
+  assert set(rendered.getInternalTransitionIds("s41", "ping")).issubset(state_owned_ids)
+  assert set(rendered.getInternalTransitionSectionTextIds("s41", "ping")).issubset(
+    state_owned_ids
+  )
+  assert set(rendered.getInternalTransitionEventTextIds(
+    "internal_transition_s41_ping"
+  )).issubset(state_owned_ids)
+
+  transition_id = rendered.getExternalTransitionIds("s1", "transition", "s211")[0]
+  transition_owned_ids = set(rendered.getExternalTransitionOwnedIds(transition_id))
+  assert transition_id in transition_owned_ids
+  assert set(rendered.getExternalTransitionLabelTextIds(transition_id)).issubset(
+    transition_owned_ids
+  )
+  assert set(rendered.getExternalTransitionActivityTextIds(
+    transition_id,
+    {
+      "kind": "action_language",
+      "module": "tests.reference_model.hsm.reference_hsm_executables",
+      "name": "s1_to_s211",
+    },
+  )).issubset(transition_owned_ids)

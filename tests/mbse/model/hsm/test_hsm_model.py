@@ -36,6 +36,7 @@ def test_load_and_validate_hsm_model() -> None:
     "ping",
     "choose_transition",
     "set_mode",
+    "reset_model",
   ]
 
 
@@ -157,6 +158,12 @@ def test_hsm_model_exposes_typed_event_parameters() -> None:
     "type": "enum",
     "enum_id": "transition_mode",
   }
+  assert model.getEventParameters("reset_model") == [
+    {
+      "name": "full_reset",
+      "type": "bool",
+    }
+  ]
 
 
 def test_hsm_model_rejects_invalid_typed_parameter_shapes(tmp_path: Path) -> None:

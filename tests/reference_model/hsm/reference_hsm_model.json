@@ -38,6 +38,16 @@
           "enum_id": "transition_mode"
         }
       ]
+    },
+    {
+      "id": "reset_model",
+      "label": "Reset Model",
+      "parameters": [
+        {
+          "name": "full_reset",
+          "type": "bool"
+        }
+      ]
     }
   ],
   "initial_transition": {
@@ -321,6 +331,14 @@
                   "activities": [{ "kind": "action_language", "module": "tests.reference_model.hsm.reference_hsm_executables", "name": "guard_false_branch"}]
                 }
               }
+            },
+            {
+              "event_id": "reset_model",
+              "target_id": "s1",
+              "activities": [
+                { "kind": "action_language", "module": "tests.reference_model.hsm.reference_hsm_executables", "name": "capture_reset_request"},
+                { "kind": "model", "model_id": "reference_activity"}
+              ]
             }
           ]
         }

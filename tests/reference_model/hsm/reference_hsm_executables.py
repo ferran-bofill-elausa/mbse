@@ -69,3 +69,7 @@ def apply_target_mode(ctx) -> None:
 
 def enqueue_transition(ctx) -> None:
   ctx.send_event("transition")
+
+
+def capture_reset_request(ctx) -> None:
+  ctx.full_reset_requested = bool(ctx.event_parameters["full_reset"])

@@ -243,6 +243,115 @@ class HsmRender:
       (),
     )
 
+  def getStateOwnedIds(self, state_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one rendered state."""
+
+    highlight_index = self._requireHighlightIndex()
+    state_svg_id = self.getStateId(state_id)
+    owned_ids: list[str] = [state_svg_id]
+    owned_ids.extend(self.getStateLabelTextIds(state_id))
+
+    for key, text_ids in highlight_index.state_hook_section_text_ids.items():
+      if key[0] == state_id:
+        owned_ids.extend(text_ids)
+    for key, text_ids in highlight_index.state_hook_activity_text_ids.items():
+      if key[0] == state_id:
+        owned_ids.extend(text_ids)
+
+    for transition_id, owner in highlight_index.internal_transition_owner_by_id.items():
+      if owner[0] == state_id:
+        owned_ids.extend(self.getInternalTransitionOwnedIds(transition_id))
+
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getInitialTransitionOwnedIds(self, owner_state_id: str | None) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one initial transition."""
+
+    transition_id = (
+      self.getRootInitialTransitionId()
+      if owner_state_id is None
+      else self.getInitialTransitionId(owner_state_id)
+    )
+    source_id = (
+      self.getRootInitialTransitionSourceId()
+      if owner_state_id is None
+      else self.getInitialTransitionSourceId(owner_state_id)
+    )
+    owned_ids = [transition_id, source_id]
+    owned_ids.extend(self.getInitialTransitionLabelTextIds(transition_id))
+    owned_ids.extend(self._getTextIdsByFirstKeyPart(
+      self._requireHighlightIndex().initial_transition_activity_text_ids,
+      transition_id,
+    ))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getExternalTransitionOwnedIds(self, transition_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one external-style transition edge."""
+
+    owned_ids = [transition_id]
+    owned_ids.extend(self.getExternalTransitionLabelTextIds(transition_id))
+    owned_ids.extend(self._getTextIdsByFirstKeyPart(
+      self._requireHighlightIndex().external_transition_activity_text_ids,
+      transition_id,
+    ))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getGuardNodeOwnedIds(self, guard_node_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one guard node."""
+
+    highlight_index = self._requireHighlightIndex()
+    owned_ids = [guard_node_id]
+    for guard_ids_key, guard_node_ids in highlight_index.guard_node_ids_by_key.items():
+      if guard_node_id in guard_node_ids:
+        owned_ids.extend(highlight_index.guard_node_text_ids_by_key.get(guard_ids_key, ()))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getInternalTransitionOwnedIds(self, transition_id: str) -> tuple[str, ...]:
+    """Return all visible SVG ids owned by one internal transition."""
+
+    highlight_index = self._requireHighlightIndex()
+    owned_ids = [transition_id]
+    owner = highlight_index.internal_transition_owner_by_id.get(transition_id)
+    if owner is not None:
+      owned_ids.extend(highlight_index.internal_transition_section_text_ids.get(owner, ()))
+    owned_ids.extend(self.getInternalTransitionEventTextIds(transition_id))
+    owned_ids.extend(self._getTextIdsByFirstKeyPart(
+      highlight_index.internal_transition_activity_text_ids,
+      transition_id,
+    ))
+    return tuple(dict.fromkeys(owned_ids))
+
+  def getOwnedIdsForHighlightId(self, element_id: str) -> tuple[str, ...]:
+    """Return the complete visible owner set for one SVG highlight id."""
+
+    highlight_index = self._requireHighlightIndex()
+    for state_id, state_svg_id in highlight_index.state_ids_by_state_id.items():
+      if element_id == state_svg_id:
+        return self.getStateOwnedIds(state_id)
+
+    owner_state_id = self._findTextOwnerStateId(element_id)
+    if owner_state_id is not None:
+      return self.getStateOwnedIds(owner_state_id)
+
+    initial_owner_found, initial_owner_id = self._findInitialTransitionOwnerId(element_id)
+    if initial_owner_found:
+      return self.getInitialTransitionOwnedIds(initial_owner_id)
+
+    for transition_id in self._iterExternalStyleTransitionIds():
+      if element_id in self.getExternalTransitionOwnedIds(transition_id):
+        return self.getExternalTransitionOwnedIds(transition_id)
+
+    for guard_node_ids in highlight_index.guard_node_ids_by_key.values():
+      for guard_node_id in guard_node_ids:
+        if element_id in self.getGuardNodeOwnedIds(guard_node_id):
+          return self.getGuardNodeOwnedIds(guard_node_id)
+
+    for transition_id in highlight_index.internal_transition_owner_by_id:
+      if element_id in self.getInternalTransitionOwnedIds(transition_id):
+        return self.getInternalTransitionOwnedIds(transition_id)
+
+    return (element_id,)
+
   def _prepareView(self, model: HsmModel):
     """Prepare render artifacts for one HSM model."""
 
@@ -575,6 +684,7 @@ class HsmRender:
       guard_branch_ids_by_key=prepared.guard_branch_ids_by_key,
       guard_node_text_ids_by_key=text_targets.guard_node_text_ids,
       internal_transition_ids_by_key=prepared.internal_transition_ids_by_key,
+      internal_transition_owner_by_id=prepared.internal_transition_owner_by_id,
       state_hook_section_text_ids=text_targets.state_hook_section_ids,
       state_hook_activity_text_ids=text_targets.state_hook_activity_ids,
       external_transition_label_text_ids=text_targets.external_transition_label_ids,
@@ -605,3 +715,49 @@ class HsmRender:
     if self._highlight_index is None:
       raise RuntimeError("HSM has not been rendered.")
     return self._highlight_index
+
+  def _getTextIdsByFirstKeyPart(self, text_ids_by_key, first_key_part: str) -> list[str]:
+    """Return text ids whose semantic key starts with one SVG id."""
+
+    ids: list[str] = []
+    for key, text_ids in text_ids_by_key.items():
+      if key[0] == first_key_part:
+        ids.extend(text_ids)
+    return ids
+
+  def _findTextOwnerStateId(self, element_id: str) -> str | None:
+    """Return the state owning one state text fragment, if any."""
+
+    highlight_index = self._requireHighlightIndex()
+    for state_id, text_ids in highlight_index.state_label_text_ids.items():
+      if element_id in text_ids:
+        return state_id
+    for key, text_ids in highlight_index.state_hook_section_text_ids.items():
+      if element_id in text_ids:
+        return key[0]
+    for key, text_ids in highlight_index.state_hook_activity_text_ids.items():
+      if element_id in text_ids:
+        return key[0]
+    return None
+
+  def _findInitialTransitionOwnerId(self, element_id: str) -> tuple[bool, str | None]:
+    """Return whether one SVG id belongs to an initial transition."""
+
+    highlight_index = self._requireHighlightIndex()
+    for owner_state_id, transition_id in highlight_index.initial_transition_ids_by_owner_id.items():
+      owned_ids = self.getInitialTransitionOwnedIds(owner_state_id)
+      if element_id in owned_ids:
+        return True, owner_state_id
+    return False, None
+
+  def _iterExternalStyleTransitionIds(self):
+    """Yield all external-style transition SVG ids."""
+
+    highlight_index = self._requireHighlightIndex()
+    for transition_ids_by_key in (
+      highlight_index.external_transition_ids_by_key,
+      highlight_index.guarded_transition_ids_by_key,
+      highlight_index.guard_branch_ids_by_key,
+    ):
+      for transition_ids in transition_ids_by_key.values():
+        yield from transition_ids

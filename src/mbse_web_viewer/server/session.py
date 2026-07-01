@@ -30,6 +30,7 @@ class ViewerBreakpointTarget:
   """One semantic debugger breakpoint target resolved to SVG ids."""
 
   id: str
+  model_id: str
   label: str
   svg_ids: tuple[str, ...]
   text_ids: tuple[str, ...]
@@ -51,9 +52,7 @@ class ViewerFocus:
 class ViewerSession:
   """Full JSON session served to the browser viewer."""
 
-  document_id: str
   active_model_id: str
-  svg_url: str
   models: tuple[dict[str, object], ...]
   enums: tuple[dict[str, object], ...]
   events: tuple[dict[str, object], ...]
@@ -64,6 +63,7 @@ class ViewerSession:
   execution_log: list[dict[str, object]]
   debugger: dict[str, object]
   highlight: ViewerHighlight
+  highlights_by_model: dict[str, ViewerHighlight]
   focus: ViewerFocus
   last_trace: ViewerTrace
   breakpoints: tuple[ViewerBreakpointTarget, ...]

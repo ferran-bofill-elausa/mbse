@@ -30,6 +30,11 @@
       "name": "output_prepared",
       "type": "bool",
       "default_value": false
+    },
+    {
+      "name": "full_reset_requested",
+      "type": "bool",
+      "default_value": false
     }
   ]
 }
