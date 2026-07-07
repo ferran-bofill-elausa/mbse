@@ -1,5 +1,0 @@
-if(EBF_PORT STREQUAL "EBF_PORT_FREERTOS")
-    add_subdirectory(freertos)
-else()
-    message(FATAL_ERROR "Invalid EBF_PORT value: ${EBF_PORT}")
-endif()

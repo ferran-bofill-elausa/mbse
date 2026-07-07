@@ -19,4 +19,4 @@ Known model schema versions are context, HSM, and activity models. JSON files wi
 
 The registry fails explicitly for duplicate `document_id` values, more than one context model, an unknown entrypoint, and unknown requested model ids.
 
-Executable references remain explicit. `action_language` resolution is configured above local runtimes and should resolve Python modules under `project_root`. Model references use `model_id` values resolved through the registry.
+Executable references remain explicit. `action_language` references are normal Python imports resolved by the active Python environment. Model references use `model_id` values resolved through the registry.

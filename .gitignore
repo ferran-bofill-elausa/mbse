@@ -1,8 +1,12 @@
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .venv/
 .viewer-js-venv/
 .python-packages/
 .mbse-rendered/
 .mbse-cli-state/
+*.egg-info/
+build/
+dist/
 build/mbse_runtime/
