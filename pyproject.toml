@@ -1,8 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
+name = "mbse"
+version = "0.1.0"
+requires-python = ">=3.11"
 dependencies = [
   "Jinja2>=3.1,<4",
   "jsonschema>=4.26,<5",
   "referencing>=0.36,<1",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=9,<10",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"*" = [
+  "*.css",
+  "*.html",
+  "*.j2",
+  "*.js",
+  "*.json",
+  "*.md",
+  "*.svg",
 ]
 
 [tool.ruff]
