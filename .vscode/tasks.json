@@ -15,6 +15,15 @@
       "label": "open_example_model",
       "type": "shell",
       "command": "${TASKS_PATH}/open_example_model.sh"
+    },
+    {
+      "label": "run_ci",
+      "type": "shell",
+      "command": "${TASKS_PATH}/run_ci.sh",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
     }
   ]
 }

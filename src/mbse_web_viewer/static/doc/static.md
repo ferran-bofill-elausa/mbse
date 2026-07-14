@@ -17,3 +17,6 @@ Shared browser modules are split by responsibility:
 - `viewer_debugger.js`: debugger summary panel rendering.
 
 The static viewer is project-session only. It expects the server payload to provide `models`, `active_model_id`, and per-model `svg_url` values. Model-specific SVG semantics are provided by the server session payload. The browser loads the active model SVG, allows navigation across session-declared models, and applies highlights, focus ids, debugger state, variables, and breakpoints from that payload without executing MBSE model semantics.
+
+The browser is served by the [Viewer Server](../../server/doc/server.md). It
+does not execute model code and has no build-time JavaScript dependencies.

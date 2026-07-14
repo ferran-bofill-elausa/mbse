@@ -4,9 +4,14 @@ The runtime layer executes authored models as mutable runtime instances.
 
 It is responsible for state progression, event queuing, variable mutation, hook and activity execution, and execution tracing.
 
+See the [Model Layer](../../model/doc/model.md) for project loading and
+validation.
+
 ## Runtime
 
-`Runtime` is the top-level public execution facade. It consumes a `ProjectRegistry` or one loaded executable model, initializes the entrypoint HSM or activity runtime, and owns the global execution log.
+[`Runtime`](../runtime.py) is the top-level public execution facade. It
+consumes a `ProjectRegistry` or one loaded executable model, initializes the
+entrypoint HSM or activity runtime, and owns the global execution log.
 
 `Runtime` owns executable resolution. Local HSM and Activity runtimes decide when an executable step must run, but do not resolve executable references themselves.
 
@@ -31,13 +36,25 @@ Model executables synchronize shared runtime variables with their caller. If a m
 
 Local HSM and activity runtime logs are not modified. Their native traces are stored under `trace` before a local runtime instance can be discarded.
 
-## TODO: Public Runtime Types
+## Execution API
 
-HSM-specific viewer code currently imports HSM trace and step types from the HSM runtime implementation module. This is acceptable while the HSM viewer remains HSM-specific, but the cleaner long-term boundary is to expose public runtime data contracts from dedicated type modules.
+Initialize with `init(registry)` for a whole project or `initModel(model,
+context)` for one already-loaded executable model.
 
-Proposed future structure:
+- `play()`, `pause()`, and `isPaused()` control automatic execution.
+- `stepInto()`, `stepOver()`, and `stepOut()` support deterministic debugging,
+  including nested model calls.
+- `sendEvent(event_id, parameters)` queues an event for an HSM root runtime.
+- `getState()` and `getEventQueue()` inspect an HSM root runtime.
+- `getVariable(name)`, `setVariable(name, value)`, `getNextStep()`,
+  `getCallStack()`, `getActiveFrame()`, and `getExecutionLog()` support test
+  assertions and diagnostics.
 
-- `mbse.runtime.hsm.hsm_runtime_types`: public HSM runtime trace, pending-step, event, and entry types.
-- `mbse.runtime.activity.activity_runtime_types`: public Activity runtime trace, pending-step, and entry types.
+Action-language executable references import Python functions from the active
+environment. Model executable references run a discovered HSM or Activity as a
+nested runtime frame and synchronize same-named variables with their caller.
 
-Concrete runtime implementations and upper layers such as server/render adapters would import those public types instead of importing type aliases from implementation modules. This keeps strong typing without pretending the upper layer does not understand HSM or Activity semantics through untyped `dict[str, Any]` values.
+## Runtime Semantics
+
+- [HSM Runtime](../hsm/doc/hsm_runtime.md)
+- [Activity Runtime](../activity/doc/activity_runtime.md)

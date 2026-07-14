@@ -5,6 +5,7 @@ from __future__ import annotations
 from mbse.model.hsm.hsm_model import HsmExternalTransitionRelation
 from mbse.model.hsm.hsm_model import HsmGuardedTransitionBranchRelation
 from mbse.model.hsm.hsm_model import HsmRelatedState
+from mbse.runtime.hsm.hsm_runtime import HsmRuntimePendingExecutionTypeAlias
 from mbse.runtime.hsm.hsm_runtime import HsmRuntimeTrace
 from mbse_web_viewer.server.session import ViewerFocus
 from mbse_web_viewer.server.session import ViewerHighlight

@@ -15,6 +15,10 @@
     {
       "label": "▶️ Open example model",
       "task": "open_example_model"
+    },
+    {
+      "label": "✅ Run CI",
+      "task": "run_ci"
     }
   ],
   "files.associations": {

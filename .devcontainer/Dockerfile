@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     python3-setuptools \
+    python3-venv \
     python-is-python3 \
     xdg-utils \
     && apt-get clean \

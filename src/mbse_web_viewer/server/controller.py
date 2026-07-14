@@ -7,18 +7,8 @@ from typing import Any
 
 from mbse.model.activity.activity_model import ActivityModel
 from mbse.model.context.context_model import ContextModel
-from mbse.model.hsm.hsm_model import HsmExternalTransitionRelation
-from mbse.model.hsm.hsm_model import HsmGuardedTransitionBranchRelation
 from mbse.model.hsm.hsm_model import HsmModel
-from mbse.model.hsm.hsm_model import HsmRelatedState
 from mbse.model.project.project_registry import ProjectRegistry
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeExternalTransition
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeGuardBranchTransition
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeGuardCondition
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeInitialTransition
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeInternalTransition
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeOnEntry
-from mbse.runtime.hsm.hsm_runtime import HsmRuntimeOnExit
 from mbse.runtime.hsm.hsm_runtime import HsmRuntimePendingExecutionTypeAlias
 from mbse.runtime.hsm.hsm_runtime import HsmRuntimeTrace
 from mbse.runtime.runtime import Runtime
@@ -35,7 +25,6 @@ from mbse_web_viewer.server.debugging.hsm_breakpoints import hsmBreakpointIdForS
 from mbse_web_viewer.server.highlighting.activity_highlighting import buildActivityHighlight
 from mbse_web_viewer.server.highlighting.hsm_highlighting import HsmHighlightingMixin
 from mbse_web_viewer.server.session import ViewerBreakpointTarget
-from mbse_web_viewer.server.session import ViewerFocus
 from mbse_web_viewer.server.session import ViewerHighlight
 from mbse_web_viewer.server.session import ViewerSession
 from mbse_web_viewer.server.session import ViewerTrace

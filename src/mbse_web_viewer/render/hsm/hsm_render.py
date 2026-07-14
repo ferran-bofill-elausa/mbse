@@ -3,7 +3,6 @@ from __future__ import annotations
 """Public HSM render API."""
 
 import subprocess
-from typing import Any
 import xml.etree.ElementTree as ET
 
 from jinja2 import Environment
@@ -599,7 +598,10 @@ class HsmRender:
         timeout=10.0,
       )
     except FileNotFoundError as error:
-      raise RuntimeError(f"Graphviz renderer is unavailable: {error}") from error
+      raise RuntimeError(
+        "Graphviz is required to render MBSE diagrams. Install Graphviz and "
+        "ensure 'dot' is on PATH."
+      ) from error
     except subprocess.TimeoutExpired as error:
       raise RuntimeError(
         f"Graphviz renderer timed out after {error.timeout} seconds."
